@@ -172,7 +172,7 @@ decide **quién** puede usar la herramienta (solo los usuarios autorizados, con 
 7. [Recomendaciones](#7-recomendaciones)
 8. [Recursos del laboratorio, costes y retirada](#8-recursos-del-laboratorio-costes-y-retirada)
 9. [Contenido del repositorio](#9-contenido-del-repositorio)
-10. [Fuentes](#10-fuentes)
+10. [Referencias](#10-referencias)
 
 ---
 
@@ -1574,28 +1574,74 @@ publicación del MCP en Internet como «solución» al requisito de conectividad
 
 ---
 
-## 10. Fuentes
+## 10. Referencias
 
-- [Custom connectors: OAuth, VNet y limitaciones](https://learn.microsoft.com/en-us/connectors/custom-connectors/)
-- [Power Platform VNet Support: servicios, regiones y condiciones](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview)
-- [Configurar VNet Support y Enterprise Policy](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-setup-configure)
-- [Diagnóstico de VNet en Power Platform](https://learn.microsoft.com/en-us/troubleshoot/power-platform/administration/virtual-network)
-- [VNet Support en Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-network-isolation-vnet)
-- [Conectar un servidor MCP existente en Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
-- [Autenticación de usuario en herramientas](https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-enduser-authentication)
-- [SSO con Entra ID para agentes en Teams](https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-sso-teams)
-- [Publicar un agente en Teams y Microsoft 365](https://learn.microsoft.com/en-us/microsoft-copilot-studio/publication-add-bot-to-microsoft-teams)
-- [Compartir agentes](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-share-bots)
+Documentación oficial de Microsoft utilizada para diseñar, montar y validar la solución, agrupada por
+tema. Los enlaces apuntan a la versión en inglés de Microsoft Learn, que es la que se actualiza antes;
+cambiando `en-us` por `es-es` en la URL se obtiene la versión en español.
+
+### 10.1 Power Platform: VNet Support y entornos
+
+- [Virtual Network support overview](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview): servicios y conectores admitidos, regiones por geografía, dimensionamiento de subredes y preguntas frecuentes (DNS personalizado, hub-spoke)
+- [FAQ: certificados de CA no reconocidas (CA interna) no admitidos](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#my-on-premises-endpoint-tls-certificates-arent-signed-by-well-known-root-certification-authorities-ca-do-you-support-unknown-certificates)
+- [Set up Virtual Network support for Power Platform](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-setup-configure): subredes delegadas, Enterprise Policy y vinculación al entorno
+- [Troubleshoot virtual network issues](https://learn.microsoft.com/en-us/troubleshoot/power-platform/administration/virtual-network): diagnósticos de DNS, conectividad y TLS desde el entorno
+- [Managed Environments overview](https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-overview) y [Enable Managed Environments](https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-enable)
+- [Power Platform macro regions](https://learn.microsoft.com/en-us/power-platform/admin/macro-regions): ubicación asignada al crear un entorno
+- [Power Platform CLI: `pac admin`](https://learn.microsoft.com/en-us/power-platform/developer/cli/reference/admin) y [`pac environment-management`](https://learn.microsoft.com/en-us/power-platform/developer/cli/reference/environment-management)
+- [Manage group teams](https://learn.microsoft.com/en-us/power-platform/admin/manage-group-teams): equipos de Dataverse vinculados a grupos de Entra ID
+- [GrantAccess (Dataverse Web API)](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/grantaccess): compartir el registro del conector con el equipo
+
+### 10.2 Conectores personalizados
+
+- [Custom connectors overview](https://learn.microsoft.com/en-us/connectors/custom-connectors/): autenticación OAuth, uso con On-premises Data Gateway y VNet, limitaciones
+- [Share a custom connector in your organization](https://learn.microsoft.com/en-us/connectors/custom-connectors/share)
+
+### 10.3 Copilot Studio y Microsoft Teams
+
+- [Extend your agent with Model Context Protocol](https://learn.microsoft.com/en-us/microsoft-copilot-studio/agent-extend-action-mcp): transporte Streamable HTTP y requisitos del servidor MCP
+- [Connect to an existing MCP server](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent): asistente MCP con OAuth 2.0 manual
+- [Configure user authentication for tools](https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-enduser-authentication): credenciales del usuario final frente a las del creador
+- [Configure user authentication in Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/configuration-end-user-authentication): *Authenticate with Microsoft*
+- [Configure single sign-on with Microsoft Entra ID for agents in Teams](https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-sso-teams)
+- [Virtual network support in Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-network-isolation-vnet)
+- [Publish an agent to Microsoft Teams and Microsoft 365](https://learn.microsoft.com/en-us/microsoft-copilot-studio/publication-add-bot-to-microsoft-teams)
+- [Share agents with other users](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-share-bots)
 - [*Your organization has prevented this agent from being installed*](https://learn.microsoft.com/en-us/troubleshoot/power-platform/copilot-studio/authoring/prevent-agent-install)
-- [Macrorregiones de Power Platform](https://learn.microsoft.com/en-us/power-platform/admin/macro-regions)
-- [Habilitar Managed Environments](https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-enable)
-- [Networking e ingress en Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/networking)
-- [FAQ de VNet Support: DNS personalizado y topología hub-spoke](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview)
-- [FAQ de VNet Support: no se admiten certificados de CA no reconocidas (CA interna)](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#my-on-premises-endpoint-tls-certificates-arent-signed-by-well-known-root-certification-authorities-ca-do-you-support-unknown-certificates)
-- [Gateway transit con peering global](https://learn.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-peering-gateway-transit)
+- [Manage agents in the Microsoft 365 admin center](https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-copilot-agents-integrated-apps)
+- [Manage custom app policies and settings in Microsoft Teams](https://learn.microsoft.com/en-us/microsoftteams/teams-custom-app-policies-and-settings)
+
+### 10.4 Microsoft Entra ID y Microsoft Graph
+
+- [Microsoft identity platform access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens): claims `iss`, `aud`, `tid`, `scp`, `azp`, `roles` y validación de la firma
+- [OAuth 2.0 authorization code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow): flujo que usa el conector para el usuario
+- [Add app roles and get them from a token](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps): roles `MCP.User` y `MCP.Probe`
+- [Restrict a Microsoft Entra app to a set of users](https://learn.microsoft.com/en-us/entra/identity-platform/howto-restrict-your-app-to-a-set-of-users) y [Assign users and groups to an application](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal): asignación obligatoria
+- [Grant an app role assignment for a service principal (Graph)](https://learn.microsoft.com/en-us/graph/api/serviceprincipal-post-approleassignedto)
+- [Create oAuth2PermissionGrant (Graph)](https://learn.microsoft.com/en-us/graph/api/oauth2permissiongrant-post): consentimiento de administrador limitado a `MCP.Access`
+
+### 10.5 Azure: red, DNS y conectividad híbrida
+
+- [Virtual network peering](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview)
+- [Configure VPN gateway transit for virtual network peering](https://learn.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-peering-gateway-transit)
+- [Configure BGP for Azure VPN Gateway](https://learn.microsoft.com/en-us/azure/vpn-gateway/bgp-howto): direcciones APIPA personalizadas para la VPN con Google Cloud
+- [Azure Private DNS overview](https://learn.microsoft.com/en-us/azure/dns/private-dns-overview)
 - [Azure DNS Private Resolver](https://learn.microsoft.com/en-us/azure/dns/dns-private-resolver-overview)
-- [Arquitectura hub-spoke en Azure](https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/hub-spoke)
+- [Hub-spoke network topology in Azure](https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/hub-spoke)
+
+### 10.6 Azure: servidor MCP de laboratorio
+
+- [Networking in Azure Container Apps environments](https://learn.microsoft.com/en-us/azure/container-apps/networking): entorno interno e *ingress*
+- [Set up IP ingress restrictions in Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/ip-restrictions)
+- [Jobs in Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/jobs): job de prueba
+- [Build a container image with ACR Tasks](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-quick-task): `az acr build`, sin Docker local
+- [Monitor logs in Azure Container Apps with Log Analytics](https://learn.microsoft.com/en-us/azure/container-apps/log-monitoring) y [Azure Monitor Logs Query API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/overview): auditoría de llamadas
+
+### 10.7 Google Cloud (opción 2C)
+
+No es documentación de Microsoft, pero se usó para la parte de GCP:
+
 - [Cloud Run: restringir el ingress (las peticiones por Cloud VPN se consideran internas)](https://cloud.google.com/run/docs/securing/ingress)
 - [Cloud Run: redes privadas y acceso con Private Service Connect desde on-premises](https://cloud.google.com/run/docs/securing/private-networking)
-- [Google Cloud: HA VPN hacia Azure](https://cloud.google.com/network-connectivity/docs/vpn/tutorials/create-ha-vpn-connections-google-cloud-azure)
-- [Google Cloud: endpoints Private Service Connect para APIs de Google](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis)
+- [HA VPN hacia Azure](https://cloud.google.com/network-connectivity/docs/vpn/tutorials/create-ha-vpn-connections-google-cloud-azure)
+- [Endpoints de Private Service Connect para APIs de Google](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis)
