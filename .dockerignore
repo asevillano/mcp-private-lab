@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+*.secret
+evidence
+test
+docs
+config
+infra
+tools
+connector

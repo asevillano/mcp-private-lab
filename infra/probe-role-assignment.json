@@ -1,0 +1,5 @@
+{
+  "principalId": "<PROBE_PRINCIPAL_ID>",
+  "resourceId": "<API_SERVICE_PRINCIPAL_ID>",
+  "appRoleId": "396bf063-63fe-41ef-b48b-87303c62b4d2"
+}

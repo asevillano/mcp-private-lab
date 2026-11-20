@@ -1,0 +1,52 @@
+{
+  "_readme": "Copy this file to config/lab.config.json (ignored by git) and replace every <PLACEHOLDER>. Scripts read missing parameters from it; see readme.md, Paso 0.",
+  "tenantId": "<TENANT_ID>",
+  "subscriptionId": "<SUBSCRIPTION_ID>",
+  "azure": {
+    "resourceGroup": "rg-mcp-lab",
+    "location": "northeurope",
+    "namePrefix": "mcp-lab",
+    "registryNamePrefix": "mcplab",
+    "foundationDeployment": "foundation",
+    "acrName": "<ACR_NAME>",
+    "logAnalyticsWorkspaceId": "<LOG_ANALYTICS_WORKSPACE_ID>",
+    "probeClientId": "<PROBE_MANAGED_IDENTITY_CLIENT_ID>",
+    "acaSubnetCidr": "10.91.0.0/23"
+  },
+  "mcp": {
+    "appName": "mcp-server",
+    "imageName": "mcp-server",
+    "imageTag": "v5",
+    "runtime": "azure-container-apps-northeurope",
+    "host": "mcp-server.<ACA_DEFAULT_DOMAIN>"
+  },
+  "entra": {
+    "apiClientId": "<API_APP_ID>",
+    "apiObjectId": "<API_APP_OBJECT_ID>",
+    "apiServicePrincipalId": "<API_SERVICE_PRINCIPAL_ID>",
+    "connectorClientId": "<CONNECTOR_APP_ID>",
+    "pilotGroupObjectId": "<PILOT_GROUP_OBJECT_ID>",
+    "pilotGroupName": "MCP-Lab-Pilot"
+  },
+  "powerPlatform": {
+    "environmentId": "<POWER_PLATFORM_ENVIRONMENT_ID>",
+    "orgUrl": "https://<ORG>.crm.dynamics.com",
+    "regions": ["canadacentral", "canadaeast"],
+    "delegatedSubnetCidrs": ["10.92.0.0/26", "10.93.0.0/26"],
+    "connectorDisplayName": "MCP Private Lab"
+  },
+  "gcp": {
+    "projectId": "<GCP_PROJECT_ID>",
+    "region": "europe-west1",
+    "prefix": "mcp-lab",
+    "subnetRange": "10.95.0.0/24",
+    "pscAddress": "10.96.0.10",
+    "pscName": "mcplabpsc",
+    "routerAsn": 64514,
+    "azureVpnGatewayIp": "<AZURE_VPN_GATEWAY_PUBLIC_IP>",
+    "azureAsn": 65515,
+    "pskFile": "%LOCALAPPDATA%\\mcp-lab\\vpn-psk.clixml",
+    "cloudRunService": "mcp-server-gcp",
+    "cloudRunHost": "mcp-server-gcp-<GCP_PROJECT_NUMBER>.europe-west1.run.app"
+  }
+}

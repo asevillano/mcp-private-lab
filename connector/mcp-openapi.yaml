@@ -1,0 +1,36 @@
+swagger: '2.0'
+info:
+  title: MCP Private Lab
+  description: Synthetic diagnostics for private MCP connectivity with delegated Entra authentication.
+  version: '1.0.0'
+host: <MCP_HOST>
+basePath: /
+schemes:
+  - https
+securityDefinitions:
+  entra:
+    type: oauth2
+    flow: accessCode
+    authorizationUrl: https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/authorize
+    tokenUrl: https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/token
+    scopes:
+      api://<API_APP_ID>/MCP.Access: Access synthetic MCP tools as the signed-in user
+security:
+  - entra:
+      - api://<API_APP_ID>/MCP.Access
+paths:
+  /mcp:
+    post:
+      summary: Private MCP diagnostics
+      description: Streamable HTTP MCP endpoint. Requires private network connectivity and a delegated API access token.
+      x-ms-agentic-protocol: mcp-streamable-1.0
+      operationId: InvokeMCP
+      responses:
+        '200':
+          description: MCP response
+        '202':
+          description: MCP notification accepted
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Insufficient delegated permission

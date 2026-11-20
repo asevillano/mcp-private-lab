@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.secret
+*.clixml
+infra/main.json
+
+# Local configuration with real tenant values (template: config/lab.config.example.json)
+config/lab.config.json
+infra/*.lab.parameters.json
+
+# Lab evidence, build log and private copies: contain tenant identifiers
+evidence/
+docs/bitacora-montaje.md
+docs/private/

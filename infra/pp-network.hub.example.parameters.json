@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "policyLocation": { "value": "europe" },
+    "primaryRegion": { "value": "westeurope" },
+    "secondaryRegion": { "value": "northeurope" },
+    "namePrefix": { "value": "<prefijo>" },
+    "primaryPrefix": { "value": "<rango VNet PP region 1, p. ej. 10.120.0.0/24>" },
+    "primarySubnet": { "value": "<subred delegada region 1, p. ej. 10.120.0.0/26>" },
+    "secondaryPrefix": { "value": "<rango VNet PP region 2, p. ej. 10.121.0.0/24>" },
+    "secondarySubnet": { "value": "<subred delegada region 2, mismo tamano, p. ej. 10.121.0.0/26>" },
+    "backendVnetId": {
+      "value": "/subscriptions/<sub-hub>/resourceGroups/<rg-hub>/providers/Microsoft.Network/virtualNetworks/<vnet-hub-con-VPN-o-ExpressRoute>"
+    },
+    "backendPeeringName": { "value": "to-hub" },
+    "createReversePeering": { "value": true },
+    "useRemoteGateways": { "value": true },
+    "allowForwardedTraffic": { "value": true },
+    "dnsServers": { "value": ["<IP del inbound endpoint del Private Resolver o DNS corporativo>"] },
+    "subnetNsgIds": { "value": [] }
+  }
+}

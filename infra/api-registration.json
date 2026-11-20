@@ -1,0 +1,36 @@
+{
+  "identifierUris": ["api://<API_APP_ID>"],
+  "api": {
+    "requestedAccessTokenVersion": 2,
+    "oauth2PermissionScopes": [
+      {
+        "id": "30c4d48e-e5a7-45e8-b93e-963ad03ba6c1",
+        "value": "MCP.Access",
+        "type": "User",
+        "isEnabled": true,
+        "adminConsentDisplayName": "Access the synthetic MCP as the signed-in user",
+        "adminConsentDescription": "Call synthetic diagnostic tools in the isolated lab.",
+        "userConsentDisplayName": "Access the synthetic MCP",
+        "userConsentDescription": "Call synthetic diagnostic tools using your identity."
+      }
+    ]
+  },
+  "appRoles": [
+    {
+      "id": "396bf063-63fe-41ef-b48b-87303c62b4d2",
+      "value": "MCP.Probe",
+      "displayName": "Synthetic MCP probe",
+      "description": "Application-only access to synthetic diagnostics; not user SSO.",
+      "allowedMemberTypes": ["Application"],
+      "isEnabled": true
+    },
+    {
+      "id": "8d0f6a2e-5b8c-4f43-9e1a-2c7b6d4e9a31",
+      "value": "MCP.User",
+      "displayName": "Pilot MCP user",
+      "description": "Signed-in pilot users allowed to call MCP tools through the connector.",
+      "allowedMemberTypes": ["User"],
+      "isEnabled": true
+    }
+  ]
+}

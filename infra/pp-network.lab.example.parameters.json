@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "value": "mcp-lab"
+    },
+    "policyLocation": {
+      "value": "canada"
+    },
+    "primaryRegion": {
+      "value": "canadacentral"
+    },
+    "secondaryRegion": {
+      "value": "canadaeast"
+    },
+    "backendVnetId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/virtualNetworks/mcp-lab-vnet"
+    },
+    "backendPeeringName": {
+      "value": "to-aca"
+    },
+    "privateDnsZoneId": {
+      "value": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/privateDnsZones/<ACA_DEFAULT_DOMAIN>"
+    },
+    "subnetNsgIds": {
+      "value": [
+        "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/networkSecurityGroups/mcp-lab-pp-canadacentral-pp-delegated-nsg-canadacentral",
+        "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>/providers/Microsoft.Network/networkSecurityGroups/mcp-lab-pp-canadaeast-pp-delegated-nsg-canadaeast"
+      ]
+    },
+    "useRemoteGateways": {
+      "value": true
+    },
+    "manageEnterprisePolicy": {
+      "value": false
+    }
+  }
+}

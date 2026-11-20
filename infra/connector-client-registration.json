@@ -1,0 +1,15 @@
+{
+  "displayName": "mcp-lab-connector",
+  "signInAudience": "AzureADMyOrg",
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "<API_APP_ID>",
+      "resourceAccess": [
+        { "id": "30c4d48e-e5a7-45e8-b93e-963ad03ba6c1", "type": "Scope" }
+      ]
+    }
+  ],
+  "web": {
+    "redirectUris": []
+  }
+}
