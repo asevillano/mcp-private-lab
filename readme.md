@@ -1041,8 +1041,19 @@ foreach ($r in 'roles/compute.networkAdmin','roles/servicedirectory.editor','rol
 gcloud services enable servicedirectory.googleapis.com dns.googleapis.com --project $cfg.gcp.projectId
 ```
 
-**2C.2 VPN Gateway de Azure (lanzarlo primero: tarda entre 30 y 45 min).** Se añade la
-`GatewaySubnet` con un comando puntual, porque redesplegar `main.bicep` en un laboratorio existente
+**2C.2 VPN Gateway de Azure (lanzarlo primero: tarda entre 30 y 45 min).** Las VNets de Power Platform
+no se conectan directamente a la VPN: lo hacen a través de una **VNet hub** con el VPN Gateway,
+mediante peerings con *gateway transit* (modelo hub-spoke). Si la organización ya tiene un hub con VPN
+o ExpressRoute, se reutiliza y este paso no hace falta.
+
+La puerta de enlace va en una subred que debe cumplir estas reglas
+([VPN Gateway settings](https://learn.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-about-vpn-gateway-settings)):
+- se llama **exactamente** `GatewaySubnet`;
+- tiene tamaño **`/27` o mayor**;
+- **no tiene NSG ni rutas definidas por el usuario hacia `0.0.0.0/0`** (no están soportados);
+- no contiene ningún otro recurso.
+
+Se añade con un comando puntual, porque redesplegar `main.bicep` en un laboratorio existente
 reescribiría la VNet (ver [6.7](#67-mcp-en-gcp-a-través-de-vpn-laboratorio)):
 
 ```powershell
