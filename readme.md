@@ -727,10 +727,26 @@ az rest --method PATCH --headers Content-Type=application/json `
 
 **1.3 Grupo piloto y rol `MCP.User`**
 
+El grupo es la **única lista de quién puede usar la solución**. Se usa en tres sitios, así que para
+dar o quitar acceso basta con añadir o quitar al usuario del grupo:
+
+| Dónde se usa | Paso | Qué controla |
+|---|---|---|
+| Asignación del rol `MCP.User` en la API del MCP | 1.3 | A quién emite Entra el token para el MCP (con *asignación requerida*, a nadie más) |
+| Grupo de seguridad del entorno de Power Platform | 3.2 | Quién puede entrar en el entorno |
+| Equipo de Dataverse con lectura del conector | 8 | Quién puede crear su propia conexión al conector |
+
+- Los usuarios deben ser **miembros directos**: la asignación de roles de aplicación de Entra no
+  tiene en cuenta los grupos anidados.
+- `--mail-nickname` es obligatorio en el comando aunque el grupo de seguridad no tenga correo.
+- Asignar el rol a un grupo requiere **Entra ID P1**.
+
 ```powershell
 az ad group create --display-name 'MCP-Lab-Pilot' --mail-nickname 'mcp-lab-pilot' --query id -o tsv
 # guarda el id en entra.pilotGroupObjectId (y el nombre en entra.pilotGroupName) y recarga las variables
 az ad group member add --group $GROUP --member-id <objectId-del-usuario>
+# objectId de un usuario: az ad user show --id <upn> --query "{upn:userPrincipalName, objectId:id}" -o table
+# (en salida de tabla, az oculta las columnas llamadas "id": usa otro alias, como objectId)
 
 @{ principalId = $GROUP; resourceId = $API_SP; appRoleId = '8d0f6a2e-5b8c-4f43-9e1a-2c7b6d4e9a31' } |
   ConvertTo-Json | Set-Content "$env:TEMP\role.json" -Encoding ascii
@@ -738,8 +754,9 @@ az rest --method POST --headers Content-Type=application/json `
   --url "https://graph.microsoft.com/v1.0/servicePrincipals/$API_SP/appRoleAssignedTo" --body "@$env:TEMP\role.json"
 ```
 
-> El grupo se crea **sin correo**. Funciona en Entra, Power Platform y Dataverse, pero el nuevo
-> diálogo *Compartir* de Copilot Studio no lo encuentra (ver [6.5](#65-acceso-de-otros-usuarios)).
+> El grupo del laboratorio es de seguridad y **sin correo**. Funciona en Entra, Power Platform y
+> Dataverse, pero el nuevo diálogo *Compartir* de Copilot Studio no lo encontró, así que el agente se
+> compartió usuario a usuario (ver [6.5](#65-acceso-de-otros-usuarios)).
 
 ### Paso 2. Servidor MCP
 
