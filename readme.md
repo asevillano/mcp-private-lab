@@ -1064,6 +1064,21 @@ az deployment group create -g $RG -n vpn-gateway --template-file infra\vpn-gatew
 # guarda la IP en gcp.azureVpnGatewayIp
 ```
 
+[vpn-gateway.bicep](./infra/vpn-gateway.bicep) crea un gateway con estas características:
+- **`RouteBased`**: es obligatorio para BGP.
+- **`VpnGw1AZ`**: el SKU más pequeño con BGP y redundancia de zona; `Basic` no admite BGP. Cuesta
+  unos 0,21 USD/hora en North Europe.
+- **BGP** con ASN `65515`, el de Azure por defecto. Azure reserva `65515` y del `65517` al `65520`, así
+  que el ASN de GCP debe ser distinto.
+- **Dos direcciones APIPA** (`169.254.21.1` y `169.254.22.1`), una por túnel.
+  - Google exige direcciones *link-local* para BGP, y Azure solo admite APIPA propias entre
+    `169.254.21.0` y `169.254.22.255`.
+  - Con APIPA, **Azure no inicia la sesión BGP**: la inicia Google.
+- **Modo activo-pasivo**, con una sola IP pública. Es una simplificación del laboratorio. La
+  [guía de Google para HA VPN con Azure](https://cloud.google.com/network-connectivity/docs/vpn/tutorials/create-ha-vpn-connections-google-cloud-azure)
+  usa **activo-activo** (dos IP públicas) para el SLA del 99,99 %: **recomendado en producción**,
+  adaptando la plantilla.
+
 **2C.3 Red de GCP**, mientras se crea el gateway.
 [infra/gcp/setup-gcp-network.ps1](./infra/gcp/setup-gcp-network.ps1) es idempotente y crea:
 
