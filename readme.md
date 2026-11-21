@@ -604,7 +604,7 @@ ejemplo.
 | `scp` | Contiene `MCP.Access` | 403 |
 | `azp` | Client ID del cliente OAuth del conector (Paso 5) | 403 |
 | `roles` | Contiene `MCP.User` | 403 |
-| Identidad del usuario | `oid` (y `upn`, si se necesita) para aplicar los permisos sobre los sistemas de la organización | — |
+| Identidad del usuario | `oid`, para aplicar los permisos sobre los sistemas de la organización. No uses `upn` para autorizar: en los tokens v2 es un campo opcional (hay que añadirlo en **Configuración del token**) y no es un identificador estable | — |
 
 > **Consejo para Windows:** en `az rest`, pasa siempre el cuerpo JSON en un fichero (`--body "@fichero.json"`)
 > y añade `--headers Content-Type=application/json`. El JSON escrito directamente en la línea de
@@ -694,11 +694,33 @@ $MCP_HOST = $cfg.mcp.host
 
 ### Paso 1. Identidades en Entra ID
 
+La API del MCP se registra en Entra ID (portal: **Entra ID → Registros de aplicaciones**). No es código:
+es la definición que Entra usa para emitir los tokens que aceptará el MCP.
+
+| Lo que se configura | Campo del token | Si no está bien, el MCP responde |
+|---|---|---|
+| URI del identificador de aplicación (`api://<appId>`) | `aud` | 401 |
+| Ámbito delegado `MCP.Access` (qué puede hacer el conector en nombre del usuario) | `scp` | 403 |
+| Rol `MCP.User` (qué usuarios están autorizados) | `roles` | 403 |
+| Versión de token = 2 | `iss` (`…/v2.0`) y `ver` | 401 |
+
+Hay **tres identificadores** distintos:
+- `appId`: la API en los tokens.
+- `objectId` del **registro**: para modificarlo con Graph (`applications/<id>`).
+- `id` de la **aplicación empresarial** o *service principal*: la instancia en el tenant
+  (`servicePrincipals/<id>`), donde se guardan la asignación obligatoria, los roles asignados y los
+  consentimientos.
+
+Si se usa uno en lugar de otro, Graph responde *Resource not found*.
+
 **1.1 Aplicación de la API del MCP**
 
 ```powershell
 az ad app create --display-name 'mcp-lab-api' --sign-in-audience AzureADMyOrg
 ```
+
+`AzureADMyOrg` equivale a *Solo inquilino único* en el portal: solo usuarios de este tenant
+obtienen tokens. La API no necesita URI de redirección, porque recibe tokens y no inicia sesiones.
 
 Anota `appId` e `id`, y el `id` del service principal que crea el segundo comando; guárdalos en
 `entra.apiClientId`, `entra.apiObjectId` y `entra.apiServicePrincipalId` y recarga las variables
@@ -706,8 +728,14 @@ Anota `appId` e `id`, y el `id` del service principal que crea el segundo comand
 
 - el scope delegado `MCP.Access`;
 - los roles `MCP.User`, para usuarios, y `MCP.Probe`, para el job de prueba;
-- tokens v2;
+- tokens v2 (`requestedAccessTokenVersion: 2`). **Es imprescindible:** una aplicación nueva tiene
+  este valor en `null`, que significa tokens v1, cuyo emisor es `https://sts.windows.net/<tenant>/`.
+  El MCP solo acepta el emisor v2 y respondería 401. En el portal se cambia en **Manifiesto**;
 - `identifierUris` = `api://<API_APP_ID>`, que el comando rellena con tu `appId`.
+
+El service principal se crea con CLI porque, al registrar la aplicación desde el portal, Entra no
+siempre lo crea solo. En el portal: **Información general → Aplicación administrada en el directorio
+local**.
 
 ```powershell
 az ad sp create --id $API_APP --query id -o tsv          # guárdalo en entra.apiServicePrincipalId y recarga antes de 1.2
@@ -717,7 +745,10 @@ az rest --method PATCH --headers Content-Type=application/json `
   --url "https://graph.microsoft.com/v1.0/applications/$API_OBJ" --body "@$env:TEMP\api-registration.json"
 ```
 
-**1.2 Exigir asignación**, para que Entra solo emita tokens a quien tenga un rol:
+**1.2 Exigir asignación**, para que Entra solo emita tokens a quien tenga un rol. Un usuario sin
+rol recibe `AADSTS50105` al conectarse y su petición nunca llega al MCP, así que Entra y el MCP son
+dos barreras independientes. En el portal: **Aplicaciones empresariales → la API → Propiedades →
+¿Se requiere asignación? = Sí**.
 
 ```powershell
 '{"appRoleAssignmentRequired": true}' | Set-Content "$env:TEMP\sp.json" -Encoding ascii
@@ -757,6 +788,33 @@ az rest --method POST --headers Content-Type=application/json `
 > El grupo del laboratorio es de seguridad y **sin correo**. Funciona en Entra, Power Platform y
 > Dataverse, pero el nuevo diálogo *Compartir* de Copilot Studio no lo encontró, así que el agente se
 > compartió usuario a usuario (ver [6.5](#65-acceso-de-otros-usuarios)).
+
+**1.4 (Opcional) Comprobar el token antes de montar el agente.** Comprueba de antemano que Entra emite
+para tu usuario un token con `aud`, `iss` v2, `scp` y `roles` correctos, sin esperar al Paso 6.
+
+El conector aún no existe, así que se usa **Azure CLI** (`appId` `04b07795-8ddb-461a-bbee-02f9e1bf7b46`)
+como cliente de prueba. Para que no pida consentimiento, se **preautoriza temporalmente**: en el portal,
+**Exponer una API → Agregar una aplicación cliente**, con el ámbito `MCP.Access`. Después:
+
+```powershell
+$tok = az account get-access-token --scope "api://$API_APP/MCP.Access" --query accessToken -o tsv
+$payload = $tok.Split('.')[1].Replace('-', '+').Replace('_', '/'); $payload = $payload.PadRight($payload.Length + (4 - $payload.Length % 4) % 4, '=')
+[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json |
+  Select-Object aud, iss, ver, scp, roles, azp, oid | Format-List
+```
+
+Resultado esperado: `aud` = `$API_APP`, `iss` = `https://login.microsoftonline.com/<tenant>/v2.0`,
+`ver` = `2.0`, `scp` = `MCP.Access` y `roles` = `MCP.User`.
+
+| Error | Significa |
+|---|---|
+| `AADSTS50105` | No tienes el rol |
+| `AADSTS65001` | Falta la preautorización o aún no se ha propagado (entre 1 y 2 minutos) |
+| `iss` con `sts.windows.net` | Versión de token 1: falta `requestedAccessTokenVersion: 2` |
+
+Después **retira la preautorización**. Con ella, cualquier usuario con el rol podría pedir tokens
+desde Azure CLI. El MCP los rechazaría igualmente, porque `azp` no es su cliente autorizado, pero es
+una vía de acceso innecesaria.
 
 ### Paso 2. Servidor MCP
 
