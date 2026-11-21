@@ -468,12 +468,96 @@ regiones (`sslErrors: None`).
 
 | Requisito | Detalle |
 |---|---|
-| Roles | Propietario o colaborador de la suscripción Azure; administrador de Power Platform; administrador de aplicaciones de Entra (o equivalente) para crear aplicaciones y conceder consentimiento |
-| Herramientas | Azure CLI (probado con 2.93), Bicep, Power Platform CLI `pac` (2.15), Node.js 22+, PowerShell 7 |
-| Licencias | Capacidad de Dataverse para un entorno; Managed Environments; Copilot Studio; usuarios con Teams |
+| Roles y permisos | Ver [3.0.2](#302-permisos-por-área) |
+| Herramientas | Ver [3.0.1](#301-herramientas-y-versiones-mínimas) |
+| Licencias | Capacidad de Dataverse para un entorno; Managed Environments; Copilot Studio; usuarios con Teams; Entra ID P1 para asignar roles de aplicación a grupos |
 | Regiones | Poder crear VNets en **las dos** regiones Azure que corresponden a la ubicación del entorno Power Platform ([tabla oficial](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#supported-regions)) |
-| Conectividad (MCP externo) | Hub de Azure con VPN Gateway o ExpressRoute hacia GCP u on-premises, y rangos IP **sin solapamiento** entre Azure, GCP y on-premises |
+| Conectividad (MCP externo) | Hub de Azure con VPN Gateway o ExpressRoute hacia GCP u on-premises, y rangos IP **sin solapamiento** entre Azure, GCP y on-premises (ver [3.0.3](#303-plan-de-direcciones-ip)) |
 | Políticas del tenant | Que Microsoft 365 y Teams permitan instalar agentes creados por la organización |
+
+### 3.0.1 Herramientas y versiones mínimas
+
+Cada herramienta configura una parte de la solución. Con una versión demasiado antigua, un comando
+puede no existir o devolver campos con otro nombre, y parecería que la configuración está mal cuando
+el problema es la herramienta.
+
+| Herramienta | Qué configura | Versión mínima | Por qué | Probado con |
+|---|---|---|---|---|
+| PowerShell | Ejecuta los scripts de `tools/` e `infra/gcp/` | **7.0** | `infra/gcp/setup-gcp-network.ps1` genera la clave IPsec con `RandomNumberGenerator.Fill`, que no existe en Windows PowerShell 5.1 | 7.6.10 |
+| Azure CLI | Entra ID, redes, VPN Gateway, DNS privado y Enterprise Policy | **2.37.0** | Primera versión en la que `az ad …` usa Microsoft Graph ([documentación](https://learn.microsoft.com/en-us/cli/azure/microsoft-graph-migration)). Antes, los campos cambian (`objectId` en lugar de `id`) | 2.93.0 |
+| Bicep | Plantillas de `infra/` | La que instala Azure CLI (`az bicep install`) | — | Incluida en Azure CLI |
+| Google Cloud CLI | Red de GCP y Cloud Run (opción 2C) | Sin mínimo publicado: comprobar las opciones (abajo) | — | 575.0.0 |
+| Power Platform CLI (`pac`) | Entorno y Managed Environment | Sin mínimo publicado: comprobar las opciones (abajo) | — | 2.15.1 |
+| Node.js | Solo para las pruebas locales del MCP de laboratorio (`npm test`) | 22 | `package.json` (`engines`) | 22 |
+
+Ver las versiones. No uses `az version --query '"azure-cli"'`: PowerShell quita las comillas
+internas y el comando falla.
+
+```powershell
+$PSVersionTable.PSVersion
+(az version -o json | ConvertFrom-Json).'azure-cli'
+gcloud version | Select-Object -First 1
+pac help | Select-Object -First 2
+```
+
+Comprobar que existen las opciones que usa la guía. Es el criterio fiable cuando no hay una versión
+mínima publicada. Tarda de 2 a 4 minutos y debe devolver **OK** en todas las líneas; si alguna dice
+**FALTA**, actualiza esa herramienta (`az upgrade`, `gcloud components update`, `pac install latest`):
+
+```powershell
+function Test-Opcion([string] $Comando, [string] $Opcion) {
+    $ayuda = (Invoke-Expression "$Comando --help 2>&1") | Out-String
+    '{0,-42} {1,-26} {2}' -f $Comando, $Opcion, $(if ($ayuda -match [regex]::Escape($Opcion)) { 'OK' } else { 'FALTA' })
+}
+Test-Opcion 'az ad app credential reset'              'display-name'
+Test-Opcion 'az network vnet subnet update'           'delegations'
+Test-Opcion 'az network vnet peering create'          'use-remote-gateways'
+Test-Opcion 'az network private-dns link vnet create' 'registration-enabled'
+Test-Opcion 'gcloud run deploy'                       'no-invoker-iam-check'
+Test-Opcion 'gcloud compute vpn-gateways create'      'stack-type'
+Test-Opcion 'gcloud compute forwarding-rules create'  'target-google-apis-bundle'
+Test-Opcion 'pac admin create'                        'macro-region'
+Test-Opcion 'pac admin set-governance-config'         'protection-level'
+Test-Opcion 'pac environment-management'              'get-supported-locations'
+```
+
+### 3.0.2 Permisos por área
+
+En la organización, cada parte suele corresponder a un equipo distinto. Conviene pedir los permisos
+antes de empezar.
+
+| Dónde | Permiso | Para qué |
+|---|---|---|
+| Entra ID | Application Administrator o Cloud Application Administrator | Registrar las aplicaciones de la API y del cliente, y conceder el consentimiento de administrador |
+| Entra ID | Groups Administrator, o ser propietario del grupo | Crear el grupo del piloto y gestionar sus miembros |
+| Azure | Network Contributor (o Contributor) en la suscripción | VNets, peering, VPN Gateway, DNS privado y Enterprise Policy |
+| Azure | Proveedores `Microsoft.Network` y `Microsoft.PowerPlatform` registrados | Sin `Microsoft.PowerPlatform`, la suscripción no admite el recurso de Enterprise Policy |
+| Power Platform | Power Platform Administrator | Crear el entorno, activar Managed Environment y vincular la política |
+| Google Cloud (2C) | `compute.networkAdmin`, `run.admin`, `dns.admin` y `servicedirectory.editor` | VPC, VPN, Cloud Router, endpoint PSC y Cloud Run |
+
+```powershell
+az provider show -n Microsoft.PowerPlatform --query registrationState -o tsv   # Registered
+az provider show -n Microsoft.Network --query registrationState -o tsv         # Registered
+# Si no: az provider register -n Microsoft.PowerPlatform
+```
+
+### 3.0.3 Plan de direcciones IP
+
+Azure, GCP y on-premises se intercambian rutas por BGP. **Si dos redes comparten rango, el tráfico no
+sabe adónde ir.** Además, una subred delegada a Power Platform no se puede redimensionar sin abrir un
+caso a Microsoft. Por eso, antes de crear nada:
+
+- pide al equipo de red los rangos que ya se usan en Azure, GCP y on-premises;
+- reserva **dos rangos libres** para las VNets de Power Platform, uno por región, con subredes
+  delegadas **del mismo tamaño**. Un entorno que no es de producción usa entre 6 y 10 IP y uno de
+  producción entre 25 y 30. El laboratorio usa `/26` (64 direcciones, 5 reservadas por Azure).
+
+| Red del laboratorio | Rango |
+|---|---|
+| Hub y MCP de ACA (`GatewaySubnet` `10.91.255.0/27`) | `10.91.0.0/16` |
+| Power Platform (Canada Central / Canada East) | `10.92.0.0/24` / `10.93.0.0/24` (subredes `/26`) |
+| VPC de GCP / endpoint PSC | `10.95.0.0/24` / `10.96.0.10/32` |
+| BGP de los túneles (APIPA) | `169.254.21.0/30` y `169.254.22.0/30` |
 
 ### 3.1 Datos necesarios del servidor MCP
 
@@ -547,8 +631,17 @@ ejemplo.
 
 ### Paso 0. Preparar la configuración local
 
-Todos los comandos se ejecutan desde la carpeta del repositorio, con Azure CLI conectado al tenant y a
-la suscripción en los que se va a montar la solución (`az login`, `az account set`):
+Todos los comandos se ejecutan desde la carpeta del repositorio, con **PowerShell 7** y con cada
+herramienta apuntando al tenant, la suscripción y el proyecto correctos. Las sesiones de `az`, `gcloud`
+y `pac` son independientes, y cualquiera puede seguir apuntando a un trabajo anterior:
+
+```powershell
+az account show --query "{tenant:tenantId, suscripcion:name, usuario:user.name}" -o table
+# Si no es el tenant o la suscripción correctos: az login --tenant <TENANT_ID>; az account set --subscription <SUBSCRIPTION_ID>
+pac auth list                        # el perfil activo (*) debe ser de un administrador de Power Platform del tenant
+# Si no: pac auth select --index <n>, o pac auth create --name <nombre> (inicio de sesión interactivo; --tenant es solo para aplicaciones)
+gcloud config get-value project      # solo opción 2C
+```
 
 ```powershell
 git clone https://github.com/asevillano/mcp-private-lab.git

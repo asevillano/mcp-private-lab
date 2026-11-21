@@ -12,3 +12,6 @@ infra/*.lab.parameters.json
 evidence/
 docs/bitacora-montaje.md
 docs/private/
+
+# Local practice guide with lab values
+mcp-private-paso-a-paso.md
