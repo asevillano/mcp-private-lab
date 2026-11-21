@@ -1257,6 +1257,18 @@ En un MCP externo, este control es la regla de firewall del Paso 4.3.
 
 ### Paso 5. Aplicación cliente OAuth del conector
 
+Es la identidad con la que **el conector de Copilot Studio pide tokens en nombre de cada usuario**. La
+API (Paso 1) **recibe** el token (`aud`). El cliente lo **pide**: aparece en el campo `azp`, y el MCP
+solo acepta los clientes de su lista. Por eso un token válido emitido para otra aplicación no sirve
+para llamar al MCP.
+
+La plantilla [infra/connector-client-registration.json](./infra/connector-client-registration.json)
+declara un **único** permiso: `MCP.Access` (delegado). Si el cliente se registra desde el portal
+(**Entra ID → Registros de aplicaciones**), hay que quitar **Microsoft Graph → User.Read**, que el portal
+añade por defecto y el conector no usa (mínimo privilegio). La URI de redirección y el secreto se
+añaden en el Paso 6: la *callback* la genera Copilot Studio y el secreto caduca, así que conviene
+crearlo justo antes de usarlo.
+
 ```powershell
 (Get-Content infra\connector-client-registration.json -Raw).Replace('<API_APP_ID>', $API_APP) |
   Set-Content "$env:TEMP\connector-client.json" -Encoding utf8
@@ -1266,14 +1278,23 @@ az rest --method POST --headers Content-Type=application/json `
 az ad sp create --id <clientAppId> --query id -o tsv   # = <clientSpId>
 ```
 
-Concede consentimiento de administrador **solo** para `MCP.Access`, para que los usuarios no vean
-una pantalla de consentimiento:
+Concede consentimiento de administrador **solo** para `MCP.Access`. Si no, cada usuario vería una
+pantalla de consentimiento, y si el tenant no permite que los usuarios consientan, la conexión
+fallaría. En el portal: **Permisos de API → Conceder consentimiento de administrador**.
 
 ```powershell
 @{ clientId = '<clientSpId>'; consentType = 'AllPrincipals'; resourceId = $API_SP; scope = 'MCP.Access' } |
   ConvertTo-Json | Set-Content "$env:TEMP\grant.json" -Encoding ascii
 az rest --method POST --headers Content-Type=application/json `
   --url https://graph.microsoft.com/v1.0/oauth2PermissionGrants --body "@$env:TEMP\grant.json"
+# Equivalente: az ad app permission grant --id <clientAppId> --api $API_APP --scope MCP.Access
+```
+
+Comprobación (una sola fila: `AllPrincipals` y `MCP.Access`):
+
+```powershell
+az ad app permission list --id <clientAppId> --query "[].{api:resourceAppId, tipo:join(',', resourceAccess[].type)}" -o table
+az ad app permission list-grants --id <clientAppId> --query "[].{tipo:consentType, ambito:scope}" -o table
 ```
 
 Autoriza ese cliente en el MCP:
