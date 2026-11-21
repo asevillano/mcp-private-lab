@@ -559,6 +559,62 @@ caso a Microsoft. Por eso, antes de crear nada:
 | VPC de GCP / endpoint PSC | `10.95.0.0/24` / `10.96.0.10/32` |
 | BGP de los túneles (APIPA) | `169.254.21.0/30` y `169.254.22.0/30` |
 
+### 3.0.4 Regiones de la Unión Europea
+
+Es posible montar la solución con todos los datos en la UE, pero conviene comprobar tres puntos
+**antes** de crear nada.
+
+**Geografías de Power Platform con VNet Support en la UE** (tabla oficial de
+[regiones admitidas](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#supported-regions)):
+
+| Geografía de Power Platform | Regiones de Azure para las VNets delegadas | Observación |
+|---|---|---|
+| **Europe** | `westeurope` + `northeurope` | **La opción recomendada**: ninguna de las dos regiones es restringida |
+| France | `francecentral` + `francesouth` | France South es una región de **acceso restringido**: hay que solicitar el acceso a Microsoft |
+| Germany | `germanywestcentral` + `germanynorth` | Germany North es una región de **acceso restringido**: hay que solicitar el acceso |
+| Sweden | `swedencentral` | Una sola región |
+| Italy | `italynorth` | Una sola región |
+| Poland | — | **Sin VNet Support** |
+| (Spain) | — | No existe como geografía de Power Platform |
+
+**1. En qué geografía cae el entorno.** En los tenants con **macrorregiones**
+(`pac environment-management get-supported-locations --json` → `locationSelectionMode = MacroRegion`)
+el administrador no elige la región, sino la macrorregión. La macrorregión *EU y EFTA* puede asignar
+Francia, Alemania, Noruega, Suecia, Suiza, **Polonia**, Italia o Europe
+([Macro regions](https://learn.microsoft.com/en-us/power-platform/admin/macro-regions)):
+
+- El **primer** entorno creado en una macrorregión fija la geografía (*afinidad*) para los siguientes
+  de ese tenant.
+- Para elegir una región concreta hace falta **Advanced Data Residency (ADR)**.
+- **Los entornos que ya existen conservan su región.** Un entorno que ya esté en la geografía
+  *Europe* sirve: basta con convertirlo en Managed Environment (Paso 3.2).
+- Comprueba la geografía de un entorno con
+  `pac environment-management get-environment-by-id-for-user --environment <id> --json` (campos `geo`
+  y `azureRegion`).
+
+**2. Que la suscripción de Azure pueda crear redes en las dos regiones.** Una primera comprobación:
+
+```powershell
+az provider show -n Microsoft.Network --query "resourceTypes[?resourceType=='virtualNetworks'].locations | [0]" -o json
+```
+
+En esa lista no aparecen las regiones restringidas para las que no se ha solicitado acceso (France
+South, Germany North). Pero la lista no lo detecta todo: la suscripción del laboratorio recibió
+`locationineligible` en West Europe aunque la región aparecía. **La prueba definitiva es crear una VNet
+vacía en cada región**, que no tiene coste, y borrarla.
+
+**3. El resto de la arquitectura puede estar en cualquier región de la UE.** Solo las VNets delegadas
+están ligadas a la geografía del entorno. El hub con el VPN Gateway o ExpressRoute puede estar en otra
+región, incluida Spain Central, porque el peering global admite *gateway transit*. Lo mismo vale para
+el MCP en GCP (por ejemplo, `europe-west1`) o en un entorno on-premises en España.
+
+**Residencia de datos:** un tenant con dirección de facturación en la UE o la EFTA queda dentro del
+**EU Data Boundary** de Copilot Studio si **todos** sus entornos están en geografías del EU Data
+Boundary ([Copilot Studio geo data residency](https://learn.microsoft.com/en-us/microsoft-copilot-studio/geo-data-residency)).
+La documentación de [ubicación de datos](https://learn.microsoft.com/en-us/microsoft-copilot-studio/data-location)
+indica que algunas integraciones, como el canal de Microsoft Teams, pueden transferir datos fuera de
+la geografía seleccionada. Esos datos se rigen por los compromisos de residencia de Microsoft 365.
+
 ### 3.1 Datos necesarios del servidor MCP
 
 Si el MCP ya existe (GCP, on-premises u otra red), hay que pedir estos datos al equipo propietario
