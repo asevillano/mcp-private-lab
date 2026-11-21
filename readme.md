@@ -1082,11 +1082,34 @@ az deployment group create -g $RG -n vpn-gateway --template-file infra\vpn-gatew
 **2C.3 Red de GCP**, mientras se crea el gateway.
 [infra/gcp/setup-gcp-network.ps1](./infra/gcp/setup-gcp-network.ps1) es idempotente y crea:
 
-- la VPC y la subred;
+- la VPC, en **modo personalizado** (para no crear subredes automáticas que podrían solaparse con
+  Azure) y con **enrutamiento dinámico global**, y la subred con Private Google Access;
 - el endpoint PSC;
 - HA VPN y Cloud Router, que anuncia la subred y la IP del PSC;
 - el gateway externo con la IP de Azure;
 - los dos túneles con sus sesiones BGP.
+
+**Por qué un endpoint PSC.** Cloud Run no tiene IP privada, y con *ingress* `internal` solo acepta
+peticiones que entren por la red privada de GCP. El patrón de Google para llegar a él desde fuera de
+GCP ([Cloud Run private networking](https://cloud.google.com/run/docs/securing/private-networking))
+tiene tres partes:
+1. un **endpoint PSC para las API de Google** (una IP interna de la VPC, `all-apis`);
+2. una **zona DNS privada** que resuelve el nombre `run.app` del servicio a esa IP (2C.7);
+3. una **ruta** hacia la IP, que Cloud Router anuncia por BGP.
+
+Así se conserva la URL `run.app` con su certificado de CA pública.
+
+Requisitos del endpoint ([PSC para API de Google](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis)):
+- API Compute Engine, Service Directory y Cloud DNS activadas (de ahí los roles de 2C.1);
+- nombre de 1 a 20 caracteres, solo minúsculas y números;
+- no es accesible desde VPC emparejadas, pero sí por VPN o Interconnect.
+
+> **Si el MCP no es Cloud Run** (por ejemplo, servidores detrás de un F5 en la VPC), **el endpoint PSC
+> no hace falta**:
+> - la ruta va directamente a la subred de la VIP;
+> - el DNS debe resolver el nombre del MCP a la VIP desde Azure;
+> - el F5 debe presentar un certificado de CA pública;
+> - el firewall de la VPC debe permitir **TCP 443 desde las subredes delegadas** de Power Platform.
 
 La clave IPsec se genera aleatoriamente y se guarda **cifrada con DPAPI** (solo tu usuario de Windows
 puede leerla) en `gcp.pskFile` (por defecto `%LOCALAPPDATA%\mcp-lab\vpn-psk.clixml`). Nunca se muestra ni se guarda en el repositorio.
