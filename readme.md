@@ -1191,26 +1191,55 @@ el laboratorio el 20/11), comparte el agente con ellos y usa su enlace de instal
 
 ### Paso 3. Entorno Power Platform
 
+El entorno es donde viven el agente, el conector y las conexiones de los usuarios. Hay tres cosas que
+decidir al crearlo:
+
+| Decisión | Por qué importa |
+|---|---|
+| **Geografía** | Fija las dos regiones de Azure de las VNets delegadas (Paso 4) y debe estar en la tabla de VNet Support. Ver [3.0.4](#304-regiones-de-la-unión-europea) para la UE |
+| **Grupo de seguridad** | Solo sus miembros pueden entrar al entorno. Admite grupos de seguridad y grupos de Microsoft 365 |
+| **Managed Environment** | **Requisito de VNet Support**: sin él no se puede vincular la Enterprise Policy |
+
+Un entorno solo admite **una** Enterprise Policy, y una política vinculada no se puede modificar
+(Paso 4.2). Puede usarse un entorno que ya exista, porque conserva su región: basta con activar
+Managed Environment.
+
 **3.1 Comprueba la ubicación antes de crear el entorno.** El tenant puede asignar la ubicación
 concreta dentro de una *macrorregión*. Esa ubicación tiene que estar en la tabla de VNet Support, y
-tu suscripción debe poder crear redes en sus dos regiones.
+tu suscripción debe poder crear redes en sus dos regiones. El primer entorno de una macrorregión
+fija la geografía de los siguientes de ese tenant (*afinidad*).
 
 ```powershell
 pac environment-management get-supported-locations --json   # locationSelectionMode y macroRegions
 ```
 
-**3.2 Crear el entorno** restringido al grupo piloto y activar Managed Environment:
+**3.2 Crear el entorno** restringido al grupo piloto y activar Managed Environment. En el portal:
+**Power Platform admin center → Administrar → Entornos → + Nuevo** y, después, **Habilitar entornos
+administrados**. Crear el entorno tarda entre 5 y 15 minutos y consume capacidad de Dataverse (aprox.
+1 GB; compruébalo en **Licencias → Capacidad**).
 
 ```powershell
 pac admin create --name 'MCP Private Lab' --type Production --macro-region north-america `
   --currency EUR --language 3082 --domain mcp-private-lab --security-group-id $GROUP
-# guarda el id del entorno en powerPlatform.environmentId y su URL (https://<org>.crm….dynamics.com)
-# en powerPlatform.orgUrl; recarga las variables (Paso 0)
-pac environment-management get-environment-by-id-for-user --environment $ENV_ID --json   # anota azureRegion
-pac admin set-governance-config --environment $ENV_ID --protection-level Standard
+$ENV_ID = (pac admin list --json | ConvertFrom-Json | Where-Object DisplayName -eq 'MCP Private Lab').EnvironmentId
+# guarda el id en powerPlatform.environmentId y la URL (https://<org>.crm….dynamics.com) en
+# powerPlatform.orgUrl; recarga las variables (Paso 0)
+pac environment-management get-environment-by-id-for-user --environment $ENV_ID --json | ConvertFrom-Json |
+  Select-Object displayName, type, geo, azureRegion, url, securityGroupId, protectionLevel
+pac admin set-governance-config --environment $ENV_ID --protection-level Standard   # Standard = Managed Environment
 ```
 
-En el laboratorio, `azureRegion` = `canadacentral`, así que la pareja es **Canada Central + Canada East**.
+`geo` decide la pareja de regiones y la ubicación de la política (guárdalos en `powerPlatform.regions`):
+
+| `geo` | Regiones de las VNets | Ubicación de la Enterprise Policy |
+|---|---|---|
+| `europe` | `westeurope`, `northeurope` | `europe` |
+| `canada` | `canadacentral`, `canadaeast` | `canada` |
+| `unitedstates` | `eastus`, `westus` | `unitedstates` |
+| Otras | Ver la [tabla oficial](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#supported-regions) | Ídem |
+
+En el laboratorio, `geo` = `canada`, así que la pareja es **Canada Central + Canada East**.
+`protectionLevel` debe quedar en `Standard`.
 
 ### Paso 4. VNet Support y conectividad con el MCP
 
