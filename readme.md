@@ -1130,25 +1130,49 @@ puede leerla) en `gcp.pskFile` (por defecto `%LOCALAPPDATA%\mcp-lab\vpn-psk.clix
 .\infra\gcp\setup-gcp-network.ps1          # lee gcp.* de config/lab.config.json; muestra las IP de HA VPN
 ```
 
-**2C.4 Conexiones de Azure hacia las dos interfaces de HA VPN** (cuando el gateway está listo). La
-clave se lee del fichero cifrado y se pasa como parámetro seguro; el fichero temporal de
-parámetros se borra al terminar:
+**2C.4 Conexiones de Azure hacia las dos interfaces de HA VPN** (cuando el gateway está listo).
+[vpn-gcp-connections.bicep](./infra/vpn-gcp-connections.bicep) crea, para cada interfaz de la HA
+VPN:
+- un **gateway de red local**, con la IP pública de GCP, el ASN de Cloud Router y su dirección BGP.
+  Va **sin prefijos**: con BGP las redes de GCP se aprenden y no se escriben a mano;
+- una **conexión** IPsec IKEv2 con BGP y la dirección APIPA de Azure de ese túnel.
+
+La clave se lee del fichero cifrado y se pasa como parámetro seguro; el fichero temporal de
+parámetros se borra al terminar. Con un gateway de Azure activo-activo habría que adaptar la
+plantilla para conectar cada IP de Azure.
 
 ```powershell
 $psk = [Net.NetworkCredential]::new('', (Import-Clixml ([Environment]::ExpandEnvironmentVariables($cfg.gcp.pskFile)))).Password
 $pf = Join-Path $env:TEMP ([guid]::NewGuid().ToString() + '.json')
+$havpnIps = @('<GCP_HAVPN_IP_0>', '<GCP_HAVPN_IP_1>')   # salida haVpnInterfaceIps de 2C.3
 @{ '$schema'='https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'; contentVersion='1.0.0.0'
-   parameters=@{ gatewayName=@{ value="$P-vpngw" }; prefix=@{ value="$P-gcp" }; gcpInterfaceIps=@{ value=@('<GCP_HAVPN_IP_0>','<GCP_HAVPN_IP_1>')   # salida haVpnInterfaceIps de 2C.3 }; sharedKey=@{ value=$psk } } } |
+   parameters=@{ gatewayName=@{ value="$P-vpngw" }; prefix=@{ value="$P-gcp" }; gcpInterfaceIps=@{ value=$havpnIps }; sharedKey=@{ value=$psk } } } |
   ConvertTo-Json -Depth 5 | Set-Content $pf
 try { az deployment group create -g $RG -n vpn-gcp-connections --template-file infra\vpn-gcp-connections.bicep --parameters "@$pf" }
 finally { Remove-Item $pf -Force; Remove-Variable psk }
 ```
 
-**2C.5 Comprobar túneles y BGP**
+**Clave compartida (PSK):** es lo único que autentica el túnel. Debe ser aleatoria y larga, y se
+intercambia con el equipo de GCP por un **canal seguro** (gestor de secretos), **nunca** por correo ni en
+documentos.
+
+**2C.5 Comprobar túneles y BGP.** Hay tres capas, y cada síntoma apunta a una:
+
+| Capa | Comprobación | Si falla |
+|---|---|---|
+| Túnel IPsec | GCP `ESTABLISHED`; Azure `Connected` | Clave distinta, IP pública equivocada o IKE distinto |
+| Sesión BGP | GCP `UP`; Azure `Connected` | APIPA o ASN cruzados. Con APIPA, **Azure no inicia la sesión**: revisa el lado de GCP |
+| Rutas | GCP aprende el hub y las subredes de Power Platform; Azure aprende la subred de GCP y la IP del PSC | Falta el anuncio personalizado en GCP o el *gateway transit* en Azure |
+
+Cada red aparece por **los dos túneles con la misma prioridad** (ECMP): el tráfico se reparte, y si un
+túnel cae, sigue por el otro.
 
 ```powershell
 gcloud compute vpn-tunnels list --filter="name~$G" --format='table(name,status,detailedStatus)'   # ESTABLISHED
 gcloud compute routers get-status "$G-router" --region europe-west1 --format='value(result.bgpPeerStatus[].status)'   # UP;UP
+gcloud compute routers get-status "$G-router" --region europe-west1 --flatten="result.bestRoutes[]" `
+  --format="table(result.bestRoutes.destRange,result.bestRoutes.nextHopIp)"   # hub y subredes de Power Platform
+az network vnet-gateway list-bgp-peer-status -g $RG -n "$P-vpngw" --query "value[].{vecino:neighbor, estado:state, rutas:routesReceived}" -o table
 az network vnet-gateway list-learned-routes -g $RG -n "$P-vpngw" --query "value[?origin=='EBgp'].network" -o tsv   # 10.95.0.0/24, 10.96.0.10/32
 ```
 
