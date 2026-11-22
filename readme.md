@@ -1203,11 +1203,34 @@ gcloud run deploy $cfg.gcp.cloudRunService --region europe-west1 `
 
 `--no-invoker-iam-check` desactiva la comprobación de IAM de Google en Cloud Run: la identidad la
 valida el propio MCP con el token de Entra. Lo que impide llegar desde Internet es `--ingress internal`.
+Son dos controles independientes: la red (solo tráfico privado) y la identidad (token de Entra válido).
+
+| Variable | Qué controla en el MCP | Si está mal |
+|---|---|---|
+| `TENANT_ID` | Emisor (`iss`) y tenant (`tid`) esperados | 401 |
+| `API_CLIENT_ID` | Audiencia (`aud`). El MCP acepta **una sola API**, así que cada API necesita su propio servicio | 401 |
+| `ALLOWED_CLIENT_IDS` | Clientes autorizados (`azp`): el cliente del conector | 403 |
+| `RESOURCE_URL` | URL del recurso que anuncia el MCP | Si no empieza por `https://`, el contenedor no arranca |
+| `PROBE_CLIENT_ID` | Identidad del job de prueba (opcional) | — |
+| `MCP_RUNTIME` | Etiqueta `runtime` de la respuesta (informativa) | — |
 
 > `gcp.cloudRunHost` se conoce antes de desplegar: Cloud Run usa
 > `<servicio>-<número de proyecto>.<región>.run.app`. El número del proyecto se obtiene con
-> `gcloud projects describe $cfg.gcp.projectId --format='value(projectNumber)'`. Compruébalo después
-> con `gcloud run services describe $cfg.gcp.cloudRunService --region europe-west1 --format='value(status.url)'`.
+> `gcloud projects describe $cfg.gcp.projectId --format='value(projectNumber)'`. `status.url` devuelve
+> **otra** forma de URL (`…-ew.a.run.app`). Para ver todas las URL del servicio:
+> `gcloud run services describe $cfg.gcp.cloudRunService --region europe-west1 --format="value(metadata.annotations.'run.googleapis.com/urls')"`.
+
+Comprobaciones después del despliegue:
+
+```powershell
+$filtro = "resource.type=`"cloud_run_revision`" AND resource.labels.service_name=`"$($cfg.gcp.cloudRunService)`" AND jsonPayload.event=`"listening`""
+gcloud logging read $filtro --freshness=1h --limit 1 --format="table(timestamp,jsonPayload.event,jsonPayload.port)"   # listening 8080
+curl.exe -s -o NUL -w '%{http_code}' "$url/healthz"   # 404: Internet no llega (ingress internal)
+```
+
+`gcloud logging read` solo busca por defecto en el último día; `--freshness` amplía o reduce ese
+margen. **Para producción**, usa una **cuenta de servicio dedicada sin roles** (`--service-account`), en
+lugar de la cuenta por defecto de Compute Engine.
 
 **2C.7 DNS privado en Azure** solo para el nombre del servicio (no afecta a otros `*.run.app`),
 enlazado a la VNet hub y a las dos VNets de Power Platform
