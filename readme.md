@@ -1111,6 +1111,18 @@ Requisitos del endpoint ([PSC para API de Google](https://cloud.google.com/vpc/d
 > - el F5 debe presentar un certificado de CA pública;
 > - el firewall de la VPC debe permitir **TCP 443 desde las subredes delegadas** de Power Platform.
 
+**HA VPN y Cloud Router:**
+- La **HA VPN** tiene dos interfaces con dos IP públicas. Para el SLA del 99,99 % debe haber un túnel
+  desde cada interfaz.
+- El **gateway externo** describe Azure:
+  - con Azure activo-pasivo (una IP), es de tipo `SINGLE_IP_INTERNALLY_REDUNDANT`;
+  - con activo-activo (dos IP), de tipo `TWO_IPS_REDUNDANCY`
+    ([topologías de HA VPN](https://cloud.google.com/network-connectivity/docs/vpn/concepts/topologies)).
+- **Cloud Router** exige un ASN privado (`64512`-`65534` o `4200000000`-`4294967294`), distinto del de
+  Azure.
+- Usa **anuncio personalizado**: todas las subredes **más la IP del endpoint PSC** (`/32`). El endpoint
+  no pertenece a ninguna subred, así que sin ese anuncio Azure no tendría ruta hacia el MCP.
+
 La clave IPsec se genera aleatoriamente y se guarda **cifrada con DPAPI** (solo tu usuario de Windows
 puede leerla) en `gcp.pskFile` (por defecto `%LOCALAPPDATA%\mcp-lab\vpn-psk.clixml`). Nunca se muestra ni se guarda en el repositorio.
 
