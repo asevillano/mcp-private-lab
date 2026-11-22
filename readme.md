@@ -423,8 +423,8 @@ dominio con un registro en el DNS público, sin conectarse al servidor. El MCP s
 **Cómo saber qué certificado presenta el MCP**
 
 1. **Comprobación definitiva, desde Power Platform** (Paso 4.5): `pp-vnet-diagnostics.ps1` devuelve,
-   en `tls`, el emisor (`certificate.issuer`), si es autofirmado (`isSelfSigned`), si ha caducado
-   (`isExpired`) y los errores de validación (`sslErrors`). `sslErrors: None` significa que Power
+   en `tls`, el emisor (`certificate.issuer`), si es autofirmado (`certificate.isSelfSigned`), si ha
+   caducado (`certificate.isExpired`) y los errores de validación (`sslWithCRL.sslErrors`). `sslErrors: None` significa que Power
    Platform acepta el certificado.
 2. **Comprobación previa, desde un equipo de la red interna** que llegue al MCP:
 
@@ -1433,6 +1433,24 @@ Anota la salida `policySystemId` y guarda en `powerPlatform.regions` y
 `powerPlatform.delegatedSubnetCidrs` la pareja de regiones y las subredes delegadas (salida
 `ppSubnetPrefixes`).
 
+**Sobre la Enterprise Policy:**
+- Es un recurso de Azure de tipo `NetworkInjection` que reúne las subredes delegadas de las dos
+  regiones. Su **ubicación es la geografía de Power Platform** (`geo` del entorno: `canada`, `europe`…),
+  no una región de Azure; si no coincide, no se puede vincular.
+- **Una política vinculada no se puede modificar**, y una subred solo puede pertenecer a una política.
+  Una política sí puede asignarse a varios entornos.
+- Si la crea el equipo de Azure y la vincula otra persona, esta necesita al menos el rol **Lector**
+  sobre la política.
+- Sin Bicep, también se puede crear con la **plantilla oficial** del procedimiento manual
+  ([Set up VNet support](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-setup-configure),
+  en el portal en *Implementar una plantilla personalizada*). Conviene validarla antes con
+  `az deployment group validate`.
+- Para consultarla y obtener su `systemId`:
+
+```powershell
+az resource show -g <rg> -n <política> --resource-type Microsoft.PowerPlatform/enterprisePolicies --query "{tipo:kind, ubicacion:location, systemId:properties.systemId}" -o json
+```
+
 **4.3 [MCP externo] Conectividad, DNS y firewall.** Lo configura el equipo de red de Azure junto con
 el equipo de GCP u on-premises, usando los datos de la [sección 3.1](#31-datos-necesarios-del-servidor-mcp):
 
@@ -1474,14 +1492,30 @@ laboratorio y con un MCP externo; solo cambia `-HostName`. El entorno y las regi
 .\tools\pp-vnet-diagnostics.ps1 -HostName mcp.example.internal -OutFile "$env:TEMP\pp-diagnostics.json"
 ```
 
+Resumen legible, una entrada por región:
+
+```powershell
+.\tools\pp-vnet-diagnostics.ps1 -HostName $MCP_HOST | ConvertFrom-Json | ForEach-Object {
+  [pscustomobject]@{
+    region       = $_.region
+    ipContenedor = $_.tcp.containerIpAddress
+    dns          = if ($_.dns.status) { "ERROR $($_.dns.status): reintentar" } else { $_.dns.ipAddresses -join ',' }
+    tcp          = if ($_.tcp.status) { "ERROR $($_.tcp.status): reintentar" } else { $_.tcp.tcpSuccess }
+    tls          = if ($_.tls.status) { "ERROR $($_.tls.status): reintentar" } else { "$($_.tls.sslWithCRL.protocols) · errores: $($_.tls.sslWithCRL.sslErrors)" }
+    certificado  = if ($_.tls.certificate) { "$($_.tls.certificate.issuer) · caducado: $($_.tls.certificate.isExpired) · autofirmado: $($_.tls.certificate.isSelfSigned)" }
+  }
+} | Format-List
+```
+
 Resultado esperado **en las dos regiones**:
 
 | Comprobación | Correcto | Si falla |
 |---|---|---|
+| IP del contenedor | De la subred delegada de esa región | La política no está vinculada o la red aún no se ha inicializado |
 | DNS | Devuelve la IP privada del MCP | DNS de la VNet, reglas del Private Resolver, zona enlazada |
 | TCP 443 | `tcpSuccess: true` | Peering o *gateway transit*, rutas BGP, firewall del MCP |
-| TLS | Certificado no autofirmado ni caducado; `sslErrors: None` | Certificado de CA privada, cadena incompleta o SAN distinto del FQDN |
-| (cualquiera) **503** | — | La red aún se está inicializando; espera y repite |
+| TLS | `tls.sslWithCRL.sslErrors: None`; certificado (`tls.certificate`) no autofirmado ni caducado | Certificado de CA privada, cadena incompleta o SAN distinto del FQDN |
+| (cualquiera) **503** | — | Power Platform está preparando el contenedor de diagnóstico (*Container allocated… Please re-try*). Espera uno o dos minutos y repite. Puede ocurrir en una sola región |
 
 **4.6 [Laboratorio] Permitir las subredes de Power Platform en el MCP de ACA:**
 
