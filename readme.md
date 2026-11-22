@@ -1462,23 +1462,35 @@ el equipo de GCP u on-premises, usando los datos de la [sección 3.1](#31-datos-
 | Firewall del MCP | Permitir TCP 443 **desde los dos rangos delegados** hacia la VIP del MCP (reglas de firewall VPC en GCP, firewall corporativo o F5) | Paso 4.5: TCP correcto |
 | NAT | Evitarlo. Si existe, la lista de orígenes permitidos debe usar las IP traducidas | — |
 
-**4.4 Vincular la política al entorno.** Es la misma API que usa el cmdlet oficial
-`Enable-SubnetInjection`. Usa el `policySystemId` del Paso 4.2:
+**4.4 Vincular la política al entorno.**
+
+- **Portal** (procedimiento de la guía oficial): **Power Platform admin center → Seguridad → Datos y
+  privacidad → Directivas de Azure Virtual Network** → selecciona el entorno y la política → **Guardar**.
+  Solo aparecen las políticas que el usuario puede leer y que están en la misma geografía que el
+  entorno.
+- **CLI:** es la misma API que usa el cmdlet oficial `Enable-SubnetInjection`. Usa el `policySystemId`
+  del Paso 4.2. La protección del bloque evita enviar una petición vacía: con `SystemId: null`, Power
+  Platform responde *InvalidEnterprisePolicyRequest … do not match*.
 
 ```powershell
 $POLICY_SYSTEM_ID = '<policySystemId>'   # p. ej. /regions/canada/providers/Microsoft.PowerPlatform/enterprisePolicies/<guid>
+if (-not $ENV_ID -or -not $POLICY_SYSTEM_ID) { throw 'Falta el id del entorno o el systemId de la política' }
 @{ SystemId = $POLICY_SYSTEM_ID } | ConvertTo-Json | Set-Content "$env:TEMP\link.json" -Encoding ascii
 az rest --method POST --resource https://service.powerapps.com/ --headers Content-Type=application/json `
   --url "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/environments/$ENV_ID/enterprisePolicies/NetworkInjection/link?api-version=2019-10-01" `
   --body "@$env:TEMP\link.json"
 
-# Comprobación: debe devolver "Linked"
+# Comprobación (la operación es asíncrona): debe devolver "Linked"
+# ${ENV_ID} lleva llaves porque va justo antes de "?"
 az rest --method GET --resource https://service.powerapps.com/ `
   --url "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/${ENV_ID}?api-version=2016-11-01" `
   --query properties.enterprisePolicies.vNets.linkStatus -o tsv
 ```
 
 > La vinculación puede causar hasta **30 minutos** de inestabilidad mientras se inicializa la red.
+> Hazla en una ventana de cambios. Para desvincular: `…/NetworkInjection/unlink` con el mismo cuerpo, o
+> `Disable-SubnetInjection`. Tras vincular, una directiva de la suscripción puede añadir un NSG a cada
+> subred delegada (ver 4.1).
 
 **4.5 Diagnóstico desde dentro de Power Platform.** El script ejecuta las comprobaciones de DNS,
 TCP y TLS en un contenedor del entorno, en **cada** región. Funciona igual con el MCP del
