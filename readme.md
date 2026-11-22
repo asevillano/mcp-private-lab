@@ -1351,9 +1351,23 @@ En el laboratorio, `geo` = `canada`, así que la pareja es **Canada Central + Ca
 
 ### Paso 4. VNet Support y conectividad con el MCP
 
-**4.1 Planificar las redes.** Necesitas dos rangos (uno por región de la pareja) que **no se solapen**
-con Azure, GCP ni on-premises. Cada subred delegada debe tener el mismo tamaño; el laboratorio usa
-`/26`. Consulta la [guía de dimensionamiento](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#estimating-subnet-size-for-power-platform-environments).
+**4.1 Planificar las redes.** Las subredes delegadas son donde Power Platform **inyecta los contenedores**
+que ejecutan las llamadas del conector. La llamada sale con una IP privada de esa subred y sigue sus
+rutas y su DNS, y es lo que sustituye al On-premises Data Gateway. Necesitas:
+
+- **Dos rangos**, uno por región de la pareja, que **no se solapen** con Azure, GCP ni on-premises. Las
+  dos subredes hacen falta porque Power Platform puede ejecutar el conector en cualquiera de las dos
+  regiones: con una sola, el agente fallaría solo algunas veces.
+- **El mismo tamaño** en las dos subredes. El laboratorio usa `/26`. Un entorno que no es de
+  producción usa entre 6 y 10 IP, y uno de producción entre 25 y 30. Consulta la
+  [guía de dimensionamiento](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview#estimating-subnet-size-for-power-platform-environments).
+  Una vez delegada, cambiar el rango de la subred requiere un caso de soporte.
+- **Delegación** a `Microsoft.PowerPlatform/enterprisePolicies`: la subred queda reservada en exclusiva
+  para Power Platform, y solo puede pertenecer a una Enterprise Policy.
+- **NSG** (opcional): es el lugar para limitar la salida, por ejemplo solo TCP 443 hacia los MCP. Algunas
+  suscripciones crean uno automáticamente mediante una directiva, solo con las reglas predeterminadas,
+  que permiten la salida hacia `VirtualNetwork` (incluidas las redes emparejadas y las aprendidas por
+  la VPN). Para conservarlo en los redespliegues, decláralo en `subnetNsgIds`.
 
 > **El DNS de estas VNets debe quedar definitivo antes del Paso 4.4**: con la política vinculada no
 > se puede cambiar sin desvincularla antes.
