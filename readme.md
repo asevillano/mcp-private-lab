@@ -844,6 +844,21 @@ az rest --method POST --headers Content-Type=application/json `
 > El grupo del laboratorio es de seguridad y **sin correo**. Funciona en Entra, Power Platform y
 > Dataverse, pero el nuevo diálogo *Compartir* de Copilot Studio no lo encontró, así que el agente se
 > compartió usuario a usuario (ver [6.5](#65-acceso-de-otros-usuarios)).
+>
+> **Alternativa validada: grupo de Microsoft 365**. Debe ser **privado** y con `securityEnabled = true`.
+> Sirve para los cuatro usos (rol de la API, grupo del entorno, equipo de Dataverse y **compartir el
+> agente con el grupo**). Créalo con Graph para fijar esas propiedades:
+>
+> ```powershell
+> # cuerpo en un fichero: displayName, mailNickname, mailEnabled=true, securityEnabled=true,
+> # groupTypes=["Unified"], visibility="Private", owners@odata.bind, members@odata.bind
+> az rest --method POST --headers Content-Type=application/json --url https://graph.microsoft.com/v1.0/groups --body "@grupo.json"
+> az ad group show --group <id> --query "{tipos:join(',', groupTypes), seguridad:securityEnabled, visibilidad:visibility}" -o table
+> ```
+>
+> - Si reutilizas un grupo creado desde Outlook o Teams, comprueba `securityEnabled`: si es `false`,
+>   no sirve hasta corregirlo.
+> - Si el grupo es público, cualquier usuario puede unirse por su cuenta.
 
 **1.4 (Opcional) Comprobar el token antes de montar el agente.** Comprueba de antemano que Entra emite
 para tu usuario un token con `aud`, `iss` v2, `scp` y `roles` correctos, sin esperar al Paso 6.
@@ -1689,9 +1704,31 @@ de Entra.
 3. Ve a **Usar y compartir → Ver en Teams → Agregar → Abrir**. Si sale `AppDefinitionDoesntExist`
    (ocurre en la primera instalación de cada agente), publica de nuevo, espera unos 5 min y recarga
    Teams con Ctrl+F5.
-4. Guarda el **enlace de instalación** para los demás usuarios. Todos los agentes de Copilot Studio
-   comparten el identificador de app de Teams `<TEAMS_APP_ID>`: lo que identifica a **cada agente** es
-   `templateInstanceId`. El enlace tiene esta forma:
+4. Guarda el **enlace de instalación** para los demás usuarios. La forma más sencilla de obtenerlo es
+   el diálogo **Compartir** del agente → **Copy sharing link ⌄** → **Copy can use link › Teams**, que
+   devuelve `https://teams.microsoft.com/l/app/?titleId=T_<guid>`.
+
+   El menú **Copy sharing link** tiene cuatro opciones, y solo una sirve para instalar:
+
+   | Opción | Enlace | Para qué |
+   |---|---|---|
+   | Copy link to set up | `…/user-connections?shareRef=…` | Página *Administrar sus conexiones*, donde el usuario crea su conexión. **No instala el agente** |
+   | Copy can edit link | Edición | Para coautores |
+   | **Copy can use link › Teams** | `…/l/app/?titleId=T_…` | **Instalar y usar** el agente en Teams |
+   | Copy can view link | Solo lectura | Para ver el agente sin usarlo |
+
+   **Alternativa independiente de la interfaz:** todos los agentes de Copilot Studio comparten el
+   identificador de app de Teams `<TEAMS_APP_ID>`. Lo que identifica a cada agente es
+   `templateInstanceId`, que es el campo **`componentidunique`** del agente en la tabla `bots` de
+   Dataverse:
+
+   ```powershell
+   $tok = az account get-access-token --resource <ORG_URL> --query accessToken -o tsv
+   (Invoke-RestMethod -Uri "<ORG_URL>/api/data/v9.2/bots?`$select=name,componentidunique" `
+     -Headers @{ Authorization = "Bearer $tok"; Accept = 'application/json' }).value
+   ```
+
+   El enlace tiene esta forma:
 
 | Agente | Enlace de instalación |
 |---|---|
@@ -1710,14 +1747,32 @@ requisitos siguientes**, que son independientes de la red y de OAuth:
 | # | Requisito | Cómo | Síntoma si falta |
 |---|---|---|---|
 | 1 | Pertenecer al **grupo piloto** | `az ad group member add` (Paso 1.3). Da acceso al entorno y el rol `MCP.User` | Sin acceso al entorno ni token del MCP |
-| 2 | **Agente compartido** con el usuario | Copilot Studio → **…** → **Compartir** → usuario con permiso de *usuario* (no editor) | *«Su organización impidió la instalación de este agente»* |
-| 3 | **Lectura del conector** | `.\tools\grant-connector-access.ps1` (una vez por grupo) | *«Connector information unavailable»* al crear la conexión |
+| 2 | **Agente compartido** con el usuario o con el grupo | Copilot Studio → **…** → **Compartir** → grupo o usuario con permiso de **usar** (*Can use*), no de editar. Deja desactivado *Org-wide sharing* | *«Su organización impidió la instalación de este agente»* |
+| 3 | **Lectura del conector** | `.\tools\grant-connector-access.ps1` (una vez por grupo y conector). **Compartir el agente no da acceso al conector**: el permiso de usar del diálogo no se guarda como permiso de Dataverse | *«Connector information unavailable»* al crear la conexión |
 | 4 | **Políticas del tenant** que permitan agentes de la organización | Centro de administración de M365 → Agentes → Configuración; Centro de administración de Teams → apps personalizadas | *«Su organización impidió la instalación…»* aunque el agente esté compartido |
 | 5 | **Instalar el agente** | El usuario abre el enlace de instalación → **Agregar** → **Abrir** | — |
 
+**Compartir con un grupo.** El diálogo *Compartir* encuentra y acepta **grupos de Microsoft 365 con
+`securityEnabled = true`** ([Share agents](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-share-bots)).
+Así el agente se comparte **una sola vez con el grupo**, y no usuario a usuario. Está validado de
+extremo a extremo con un grupo de Microsoft 365 **privado** y con correo: rol de la API, grupo del
+entorno, equipo de Dataverse, compartir el agente y uso por un segundo usuario.
+- El grupo de seguridad **sin correo** del laboratorio **no aparecía** en el buscador del diálogo.
+- El buscador muestra también **aplicaciones** (por ejemplo, las de la API y el cliente): elige el
+  grupo, identificado por su correo.
+- Si aparece *Bot not found* justo después de publicar, reintenta al cabo de un minuto: en la práctica
+  fue temporal.
+
+| Tipo de grupo | Compartir el agente | Diferencias a tener en cuenta |
+|---|---|---|
+| Microsoft 365, privado, `securityEnabled = true` | ✅ Con el grupo | Los propietarios pueden añadir miembros; puede tener invitados; crea buzón y sitio de SharePoint |
+| Seguridad sin correo | Usuario a usuario | Gestión centralizada en el equipo de identidad |
+
 [tools/grant-connector-access.ps1](./tools/grant-connector-access.ps1) es idempotente y hace tres cosas:
 
-- crea en Dataverse un **equipo vinculado al grupo de Entra**;
+- crea en Dataverse un **equipo vinculado al grupo de Entra**. Detecta el tipo de grupo: *grupo de
+  seguridad de Microsoft Entra ID* (`teamtype 2`) o *grupo de Office de Microsoft Entra ID*
+  (`teamtype 3`, para grupos de Microsoft 365);
 - le asigna el rol **Usuario Basic**;
 - comparte **solo el conector del MCP** con permiso de lectura.
 

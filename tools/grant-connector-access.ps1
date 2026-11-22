@@ -1,8 +1,9 @@
 <#
-Gives the members of an Entra security group read access to the solution custom connector
+Gives the members of an Entra group (security or Microsoft 365) read access to the solution custom connector
 that the Copilot Studio MCP wizard creates, so end users can create their own connection.
 Idempotent:
-  1. Dataverse team of type "Microsoft Entra ID security group" linked to the group.
+  1. Dataverse team linked to the Entra group: "Microsoft Entra ID security group" (teamtype 2) or,
+     for a Microsoft 365 group, "Microsoft Entra ID Office group" (teamtype 3). Detected automatically.
   2. Basic User security role on that team (localized name accepted).
   3. GrantAccess ReadAccess on the connector record to the team.
 Without this, users see "Connector information unavailable" when connecting.
@@ -13,7 +14,8 @@ param(
     [string] $GroupObjectId,
     [string] $TeamName,
     [string] $ConnectorDisplayName,
-    [string[]] $BasicUserRoleNames = @('Basic User', 'Usuario Basic', 'Usuario básico')
+    [string[]] $BasicUserRoleNames = @('Basic User', 'Usuario Basic', 'Usuario básico'),
+    [ValidateSet('Auto', 'Security', 'Microsoft365')] [string] $GroupType = 'Auto'
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lab-config.ps1')
@@ -21,6 +23,12 @@ $OrgUrl = (Get-LabSetting 'powerPlatform.orgUrl' $OrgUrl).TrimEnd('/')
 $GroupObjectId = Get-LabSetting 'entra.pilotGroupObjectId' $GroupObjectId
 $TeamName = Get-LabSetting 'entra.pilotGroupName' $TeamName
 $ConnectorDisplayName = Get-LabSetting 'powerPlatform.connectorDisplayName' $ConnectorDisplayName
+if ($GroupType -eq 'Auto') {
+    $groupTypes = az ad group show --group $GroupObjectId --query groupTypes -o json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw "Entra group $GroupObjectId not found (or no permission to read it)" }
+    $GroupType = if ($groupTypes -contains 'Unified') { 'Microsoft365' } else { 'Security' }
+}
+$teamType = if ($GroupType -eq 'Microsoft365') { 3 } else { 2 }
 $api = "$OrgUrl/api/data/v9.2"
 $token = az account get-access-token --resource $OrgUrl --query accessToken -o tsv
 if ($LASTEXITCODE -ne 0 -or -not $token) { throw "No token for $OrgUrl" }
@@ -34,11 +42,11 @@ if (-not $role) { throw 'Basic User role not found; pass -BasicUserRoleNames wit
 
 $team = (Get-Dv "teams?`$select=teamid,name&`$filter=azureactivedirectoryobjectid eq $GroupObjectId").value | Select-Object -First 1
 if (-not $team) {
-    $body = @{ name = $TeamName; teamtype = 2; membershiptype = 0; azureactivedirectoryobjectid = $GroupObjectId
+    $body = @{ name = $TeamName; teamtype = $teamType; membershiptype = 0; azureactivedirectoryobjectid = $GroupObjectId
                'businessunitid@odata.bind' = "/businessunits($bu)" } | ConvertTo-Json
     $hc = $h.Clone(); $hc.Prefer = 'return=representation'
     $team = Invoke-RestMethod -Method Post -Uri "$api/teams" -Headers $hc -Body $body
-    Write-Host "Team created: $($team.teamid)"
+    Write-Host "Team created: $($team.teamid) (teamtype $teamType, $GroupType group)"
 } else { Write-Host "Team exists: $($team.teamid)" }
 
 $assigned = (Get-Dv "teams($($team.teamid))/teamroles_association?`$select=roleid").value.roleid
