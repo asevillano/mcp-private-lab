@@ -13,6 +13,7 @@ se usa el Paso 2B con los datos de la [sección 3.1](#31-datos-necesarios-del-se
 | Documento | Contenido |
 |---|---|
 | Este README | Arquitectura, guía de configuración paso a paso, pruebas y troubleshooting |
+| [docs/guia-paso-a-paso.md](./docs/guia-paso-a-paso.md) | Guía manual y explicada en 18 pasos (portal o CLI) para el escenario con el MCP en **Google Cloud**: para qué sirve cada paso, cómo se comprueba, qué hacer si falla y qué acordar con cada equipo |
 | [config/lab.config.example.json](./config/lab.config.example.json) | Plantilla de configuración. Se copia como `config/lab.config.json` (ignorado por git) con los valores de tu tenant; los scripts la leen (ver [Paso 0](#paso-0-preparar-la-configuración-local)) |
 
 > Laboratorio validado en un tenant de pruebas, con **datos sintéticos**. El entorno Power Platform
@@ -2088,6 +2089,7 @@ publicación del MCP en Internet como «solución» al requisito de conectividad
 
 | Ruta | Contenido |
 |---|---|
+| [docs/guia-paso-a-paso.md](./docs/guia-paso-a-paso.md) | Guía manual y explicada en 18 pasos para el escenario con el MCP en GCP |
 | [config/lab.config.example.json](./config/lab.config.example.json) | Plantilla de la configuración local (`config/lab.config.json`, ignorado por git) que leen los scripts |
 | [src/](./src/) | Servidor MCP (`server.mjs`, `app.mjs`, `auth.mjs`) y job de prueba (`probe.mjs`) |
 | [test/](./test/) | Pruebas locales (`npm test`) |
