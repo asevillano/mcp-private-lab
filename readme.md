@@ -1651,10 +1651,21 @@ Set-Clipboard -Value ' '
 
 **6.4 Conexión y modo de credenciales:**
 
-1. **Siguiente → Crear una nueva conexión → Iniciar sesión** con tu cuenta.
+1. **Siguiente → Crear una nueva conexión → Iniciar sesión** con tu cuenta. Es el flujo OAuth completo
+   (autorización → callback → token). Entra comprueba aquí el rol `MCP.User`: sin él, devuelve
+   `AADSTS50105`.
 2. En **Editar herramienta**, deja **Autenticación = Cuenta de usuario final**: cada usuario inicia
-   sesión con su propia cuenta. Comprueba que `iam_connection_check` aparece activada.
-3. Pulsa **Listo**.
+   sesión con su propia cuenta y el MCP recibe **su** identidad. Con las credenciales del creador,
+   todos llamarían al MCP con la misma identidad.
+3. Comprueba que `iam_connection_check` aparece activada. Significa que Copilot Studio ya ha llamado
+   al MCP (`tools/list`) por la red privada y con un token válido.
+4. Pulsa **Listo**.
+
+> **«No se pudieron cargar las herramientas de MCP… (HTTP 503)» justo después de vincular la
+> política:** es inestabilidad temporal de Power Platform mientras se inicializa la red (hasta 30
+> minutos). En la práctica, esa petición **no llegó a Cloud Run**, y al reintentar funcionó. Para
+> distinguirlo de un fallo del MCP, mira sus registros: si no hay ninguna petición, el problema está
+> antes de su red.
 
 **6.5 Probar** en **Probar**:
 
@@ -1662,6 +1673,10 @@ Set-Clipboard -Value ' '
   `mode: delegated`, tu `objectId` y `clientId: <CONNECTOR_APP_ID>`.
 - **[MCP externo]** Pide algo que use una de sus herramientas. En el registro del MCP debe aparecer
   la llamada con **tu `oid`** y con el `azp` del cliente del conector.
+
+En Cloud Run, la IP de origen del tráfico que entra por un endpoint PSC aparece como `0.0.0.0`, así
+que allí no se puede filtrar por IP de origen. La protección es el *ingress* `internal` más el token
+de Entra.
 
 ### Paso 7. Publicar en Teams
 
