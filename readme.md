@@ -1234,7 +1234,16 @@ lugar de la cuenta por defecto de Compute Engine.
 
 **2C.7 DNS privado en Azure** solo para el nombre del servicio (no afecta a otros `*.run.app`),
 enlazado a la VNet hub y a las dos VNets de Power Platform
-([infra/gcp-mcp-dns.bicep](./infra/gcp-mcp-dns.bicep)):
+([infra/gcp-mcp-dns.bicep](./infra/gcp-mcp-dns.bicep)). Cómo funciona:
+- El DNS de Azure consulta **primero las zonas privadas vinculadas** a la VNet: dentro de ella, la URL
+  del MCP resuelve a la IP del PSC, y desde Internet sigue resolviendo a la IP pública, que Cloud Run
+  rechaza.
+- La zona lleva el **nombre exacto** del servicio. Una zona `run.app` cambiaría la resolución de todos
+  los servicios de Cloud Run.
+- Se mantiene el nombre en la URL, en lugar de la IP, para que el **certificado** de Google coincida.
+- Los vínculos van sin registro automático, porque no hay VM.
+- Una zona privada **se puede vincular o desvincular con la política ya vinculada**. Lo que no se puede
+  cambiar es la opción *Servidores DNS* de la VNet.
 
 ```powershell
 $p = $cfg.azure.namePrefix
