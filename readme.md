@@ -1258,9 +1258,29 @@ redespliega la red con `useRemoteGateways=true` y `manageEnterprisePolicy=false`
 ```powershell
 az deployment group create -g $RG -n pp-network-gateway-transit --template-file infra\pp-network.bicep `
   --parameters '@infra\pp-network.lab.parameters.json'
-gcloud compute routers get-status "$($cfg.gcp.prefix)-router" --region europe-west1 --format='value(result.bestRoutes[].destRange)'
-# Debe incluir 10.92.0.0/24 y 10.93.0.0/24 (subredes de Power Platform)
+gcloud compute routers get-status "$($cfg.gcp.prefix)-router" --region europe-west1 --flatten="result.bestRoutes[]" `
+  --format="table(result.bestRoutes.destRange,result.bestRoutes.nextHopIp)"
+# Debe incluir 10.92.0.0/24 y 10.93.0.0/24 (subredes de Power Platform), cada una por los dos túneles
 ```
+
+**Cómo funciona el *gateway transit*:** un peering tiene dos mitades, y hacen falta las dos.
+- En el hub, *Allow gateway transit*: el hub **ofrece** su gateway.
+- En la VNet de Power Platform, *Use remote gateways*: la VNet **usa** ese gateway.
+
+La segunda mitad solo puede crearse cuando la primera existe. Cuando las dos están `Connected`, el VPN
+Gateway anuncia por BGP el espacio de la VNet (el `/24`, no la subred) y GCP lo aprende sin cambios en
+su lado. El origen real de las llamadas son las subredes delegadas (`/26`), y son las que debe permitir
+el firewall del MCP.
+
+> **Nombres únicos en el hub.** `pp-network.bicep` llama a la mitad del hub `to-pp-<región>`. Si otro
+> entorno usa las mismas regiones y el mismo hub, el nombre chocaría con el existente. En ese caso:
+> - despliega con `createReversePeering=false`;
+> - crea la mitad del hub con un nombre propio:
+>
+> ```powershell
+> az network vnet peering create -g <rg-hub> --vnet-name <hub> -n to-<entorno>-pp-<región> `
+>   --remote-vnet <id-vnet-pp> --allow-vnet-access --allow-gateway-transit
+> ```
 
 Después del cambio, los diagnósticos de Power Platform pueden devolver **503 durante unos
 minutos** mientras se reinicializa la red.
