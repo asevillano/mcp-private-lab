@@ -103,8 +103,11 @@ for (const mode of ['delegated', 'application-probe']) {
       assert(!result.isError);
       assert.equal(JSON.parse(result.content[0].text).identity.mode, mode);
       assert.equal(JSON.parse(result.content[0].text).runtime, 'test-runtime');
+      const { identity } = JSON.parse(result.content[0].text);
+      assert(Date.parse(identity.tokenExpiresAt) - Date.parse(identity.tokenIssuedAt) === 600_000);
       const audited = logs.filter(line => line.event === 'http' && line.identityMode === mode);
-      assert(audited.length > 0 && audited.every(line => line.objectId === 'test-user'));
+      assert(audited.length > 0 && audited.every(line => line.objectId === 'test-user'
+        && line.tokenExpiresAt === identity.tokenExpiresAt));
     } finally { await client.close(); }
   });
 }

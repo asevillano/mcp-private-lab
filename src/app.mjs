@@ -18,6 +18,8 @@ export function createApp(config, keys, log = console.log) {
       // Pseudonymous Entra object/client IDs so each call can be tied to a test user.
       objectId: res.locals.identity?.objectId,
       clientId: res.locals.identity?.clientId,
+      tokenIssuedAt: res.locals.identity?.tokenIssuedAt,
+      tokenExpiresAt: res.locals.identity?.tokenExpiresAt,
     })));
     next();
   });

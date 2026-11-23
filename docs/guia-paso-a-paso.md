@@ -2411,3 +2411,17 @@ de Microsoft Entra ID* (`teamtype 3`); con un grupo de seguridad usaría `teamty
 .\tools\show-gcp-mcp-audit.ps1 -Minutes 30
 ```
 
+### 18.6 Altas, bajas y renovación del token
+
+**Para qué:** saber qué esperar cuando se da de baja o se reincorpora a un usuario. Está validado en el
+laboratorio (README, pruebas E3 a E6).
+
+- **El token se renueva solo.** Dura entre 60 y 90 minutos y el conector pide otro sin que el usuario
+  haga nada. La versión actual del MCP de ejemplo ([src/](../src/)) devuelve `tokenIssuedAt` y
+  `tokenExpiresAt` en la respuesta y en la auditoría. Si tu imagen es anterior, vuelve a construirla.
+- **Baja:** al sacar al usuario del grupo, puede seguir usando el MCP **hasta que caduque su token**. En la
+  siguiente renovación, Entra la deniega (`AADSTS50105`) y el agente vuelve a mostrar **Conectar**.
+- **Reincorporación:** antes de que vuelva a conectarse, borra sus conexiones con el conector del MCP
+  (README, sección 6.3). Si no, Teams puede quedarse pidiendo **Conectar** en bucle.
+- **Usuario fuera del grupo:** puede instalar el agente, pero al conectar recibe *Connector information
+  unavailable* y no llega ni a Entra ni al MCP.

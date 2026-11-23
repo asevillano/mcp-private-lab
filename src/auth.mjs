@@ -74,6 +74,9 @@ export function authenticate(config, keys, log = console.log) {
     res.locals.identity = {
       tenantId: payload.tid, objectId: payload.oid,
       clientId: payload.azp, mode: delegated ? 'delegated' : 'application-probe',
+      // Token lifetime (not the token itself) shows when the connector renewed it.
+      tokenIssuedAt: new Date(payload.iat * 1000).toISOString(),
+      tokenExpiresAt: new Date(payload.exp * 1000).toISOString(),
     };
     next();
   };

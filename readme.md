@@ -188,7 +188,7 @@ del conector al MCP salen por subredes de Azure delegadas al entorno, y desde ah
 la red privada: peering en Azure, o VPN/ExpressRoute hacia GCP u on-premises. La autenticación
 OAuth se hace directamente contra Microsoft Entra ID. Las dos capacidades dejan de competir.
 
-**Resultado del laboratorio (20/11/2026):**
+**Resultado del laboratorio (20/11/2026; pruebas E3 a E6 el 23/11/2026):**
 
 | Capacidad | Estado |
 |---|---|
@@ -198,8 +198,8 @@ OAuth se hace directamente contra Microsoft Entra ID. Las dos capacidades dejan 
 | El tráfico del conector va **realmente** por las subredes delegadas (prueba de bloqueo) | ✅ Demostrado |
 | Agente publicado en **Teams**, con SSO en el chat 1:1 | ✅ Demostrado |
 | Segundo usuario con **su propia identidad** | ✅ Demostrado |
-| Usuario sin autorización rechazado | ⏳ Pendiente (E3) |
-| Renovación y revocación de tokens | ⏳ Pendiente (E4, E5) |
+| Usuario sin autorización rechazado | ✅ Demostrado: fuera del grupo, lo frena Power Platform (E3a); con acceso al entorno pero sin rol, lo frena Entra con `AADSTS50105` (E3b) |
+| Renovación y revocación de tokens | ✅ Demostrado: el conector renueva el token sin intervención del usuario (E4); al retirar el rol, el acceso termina **cuando caduca el token en curso** (E5) |
 | Conexión con un MCP **en Google Cloud** dentro de una VPC, sin acceso desde Internet, por VPN (opción 2C) | ✅ Demostrado: llamadas MCP delegadas desde Copilot Studio llegan al MCP de Cloud Run por la VPN |
 | Conexión con un MCP **on-premises** a través del hub | 📐 Mismo patrón que GCP (hub + VPN/ExpressRoute); se valida en el entorno de la organización con los datos de la sección 3.1 |
 
@@ -347,11 +347,19 @@ reglas de firewall que admitan las subredes de Power Platform y validación del 
 | Capa | Control | Dónde se configura | Verificado |
 |---|---|---|---|
 | Red | Solo las subredes autorizadas llegan al MCP | Laboratorio: `ipSecurityRestrictions` de ACA. MCP externo: firewall de GCP, firewall on-premises o NSG | ✅ Prueba C2 |
-| Entorno Power Platform | Solo los miembros del grupo de seguridad del entorno | Grupo de seguridad del entorno | ⏳ E3 |
+| Entorno Power Platform | Solo los miembros del grupo de seguridad del entorno | Grupo de seguridad del entorno | ✅ E3a |
 | Agente | Con quién se comparte el agente | Copilot Studio → Compartir | ✅ E2 |
 | Conector | Quién puede leer el conector para crear su conexión | Dataverse: equipo + uso compartido del conector | ✅ E2 |
-| Entra ID | Solo los usuarios con el rol `MCP.User` obtienen token | Asignación obligatoria en la aplicación API | ⏳ E3/E5 |
-| Servidor MCP | Exige scope `MCP.Access`, cliente del conector permitido y rol `MCP.User` | Laboratorio: código (`src/auth.mjs`) y variables de la app. MCP externo: su validación de tokens | ✅ Pruebas locales y C1 |
+| Entra ID | Solo los usuarios con el rol `MCP.User` obtienen token | Asignación obligatoria en la aplicación API | ✅ E3b y E5 |
+| Servidor MCP | Exige scope `MCP.Access`, cliente del conector permitido y rol `MCP.User` | Laboratorio: código (`src/auth.mjs`) y variables de la app. MCP externo: su validación de tokens | ✅ Pruebas locales y C1; rechaza el token caducado (401) en E5 |
+
+**Lo que mostraron E3a y E3b:**
+
+- **Instalar el agente no da acceso a nada.** Un usuario fuera del grupo pudo instalar el agente
+  desde el enlace e incluso abrir el chat. El agente tenía el control de acceso *Pertenencia a
+  grupos*. Le frenó el conector, porque no es usuario del entorno.
+- **Entra es una barrera independiente de Power Platform.** Un usuario con acceso al entorno, al
+  agente y al conector, pero sin el rol, recibe `AADSTS50105` y su petición nunca llega al MCP.
 
 Registros de aplicación de Entra que intervienen (mezclarlos es la causa más habitual de fallos):
 
@@ -1799,6 +1807,14 @@ qué resultado, espera entre 2 y 5 minutos (retraso de ingesta) y ejecuta:
 Cada sesión del agente genera un grupo de tres peticiones: `initialize` (200), `notifications/initialized`
 (202) y `tools/list` o `tools/call` (200).
 
+La respuesta de la herramienta y la auditoría incluyen también **`tokenIssuedAt` y `tokenExpiresAt`**,
+la emisión y la caducidad del token de Entra (claims `iat` y `exp`; nunca el token). Sirven para ver
+cuándo el conector renovó el token y hasta cuándo sigue siendo válido uno ya revocado.
+- Entra adelanta `iat` **5 minutos** respecto a la emisión real, como margen por si los relojes no
+  coinciden: en E4 y E5 la emisión real coincide con `iat` + 5 min.
+- Un token de acceso dura por defecto **entre 60 y 90 minutos**, un valor aleatorio
+  ([duración configurable de tokens](https://learn.microsoft.com/en-us/entra/identity-platform/configurable-token-lifetimes)).
+
 **[MCP externo]** `show-mcp-audit.ps1` solo lee la auditoría del MCP de laboratorio. Con un MCP
 externo, usa su propio registro (dato 16 de la sección 3.1) y correlaciona por hora, `oid` y `azp`.
 
@@ -1815,9 +1831,11 @@ externo, usa su propio registro (dato 16 de la sección 3.1) y correlaciona por 
 | C3 | Restauración | Laboratorio: `.\tools\toggle-pp-access.ps1 -Mode Allow`. MCP externo: restaurar la regla. Después, repetir C1 | Vuelve a funcionar. **No dejar el bloqueo activo** | Ambos |
 | E1 | Teams con el creador | Chat 1:1 | Sin inicio de sesión del agente (SSO); `delegated` | Ambos |
 | E2 | Teams con un segundo usuario piloto | Enlace de instalación + primer uso | `delegated` con **su** `objectId` | Ambos |
-| E3 | Usuario fuera del grupo piloto | Enlace de instalación | Rechazado; anotar en qué capa (2.5) | Ambos |
-| E4 | Renovación del token | Repetir pasados más de 90 min | Funciona sin reconectar | Ambos |
-| E5 | Revocación | Sacar al usuario del grupo y esperar a que caduque el token | Rechazado; después, volver a añadirlo | Ambos |
+| E3a | Usuario fuera del grupo piloto | Enlace de instalación, chat y **Connect** | Rechazado; anotar en qué capa (2.5) | Ambos |
+| E3b | Usuario con acceso a Power Platform pero **sin el rol** `MCP.User` | Quitar el rol al grupo (con una asignación directa temporal al usuario de E4) y crear la conexión | `AADSTS50105`; nada llega al MCP | Ambos |
+| E4 | Renovación del token | Repetir cuando haya caducado el token anterior (`tokenExpiresAt`) | Funciona sin reconectar, con un `tokenIssuedAt` nuevo | Ambos |
+| E5 | Revocación | Quitar el rol y repetir antes y después de `tokenExpiresAt` | Funciona hasta que caduca el token; después, rechazado | Ambos |
+| E6 | Devolver el acceso | Volver a asignar el rol y que el usuario se reconecte | Vuelve a funcionar | Ambos |
 
 ### 5.3 Resultados obtenidos
 
@@ -1832,9 +1850,11 @@ externo, usa su propio registro (dato 16 de la sección 3.1) y correlaciona por 
 | C3 | ✅ Restaurado; requestId `6e02878a-3914-44f7-84bd-25aeb48dce73` | 20/11 13:28 | `audit-c2-c3.json` |
 | E1 | ✅ Teams, sin inicio de sesión del agente; 0 clics (reutilizó la conexión creada en Copilot Studio); requestId `4267dae3-ae7f-47a8-96fd-988685ef5e8e` | 20/11 13:46 | `audit-e1-teams.json` |
 | E2 | ✅ Segundo usuario piloto (Aadi Kapoor), con su propio `objectId`; requestId `50aad32e-fa2e-4e44-af00-b80f4b6acccb`. Requirió los requisitos 2 y 3 del Paso 8 | 20/11 15:03 | `audit-e2-teams-aadi.json` |
-| E3 | ⏳ Pendiente. Andre Lawson no está en el grupo piloto, así que tampoco tiene acceso al entorno: se espera el rechazo **en Power Platform**, antes de llegar a Entra | — | — |
-| E4 | ⏳ Pendiente | — | — |
-| E5 | ⏳ Pendiente | — | — |
+| E3a | ✅ Andre (fuera del grupo) **instaló el agente y abrió el chat**, pero al pulsar **Connect** recibió *Connector information unavailable*: no es usuario del entorno. Ninguna petición llegó a Entra ni al MCP | 23/11 08:23–08:27 | — |
+| E3b | ✅ Aadi, con acceso al entorno, al agente y al conector pero sin el rol: **`AADSTS50105`** al crear la conexión (interactivo, 10:31:06) | 23/11 10:31 | `entra-signins-e3-e5.json` |
+| E4 | ✅ admin: token 07:59:37 → 09:26:33; a las 09:40:25, **token nuevo** (`iat` 09:35:23, emitido a las 09:40:23) **sin iniciar sesión ni reconectar**. Entra registra la renovación como inicio de sesión no interactivo correcto. Aadi también renovó a las 08:09:17 una conexión del 20/11 sin intervenir. requestId `333f8939-706d-4fca-b209-23ad260ce248` | 23/11 09:40 | `audit-e3-e5-tokens.json`, `entra-signins-e3-e5.json` |
+| E5 | ✅ Rol retirado al grupo a las 08:12:47. Aadi **siguió funcionando** a las 08:16:21 con el mismo token (válido hasta 09:37:26). A las 09:45:32, Entra **denegó la renovación** (`50105`, no interactivo) y a las 09:45:34 el MCP rechazó el token caducado (**401 `ERR_JWT_EXPIRED`**). Teams mostró **Connect** | 23/11 08:12–09:45 | `audit-e3-e5-tokens.json`, `entra-signins-e3-e5.json` |
+| E6 | ✅ Rol devuelto al grupo a las 10:33:45. Las conexiones nuevas se crearon bien en Entra, pero **Teams siguió pidiendo Connect** (ver 6.3) hasta borrar todas las conexiones de Aadi con el conector y crear una sola. Después, `delegated` a las 12:15:18 en el mismo chat; requestId `0ddbe930-58d6-4723-b5b2-bae196cc1592` | 23/11 10:33–12:15 | `audit-e3-e5-tokens.json` |
 
 **Opción 2C: MCP en GCP por VPN**
 
@@ -1906,9 +1926,32 @@ flowchart TD
 | Hay dos secretos en la aplicación cliente | `new-connector-secret.ps1` se ejecutó dos veces | Revocar el que no se use (`az ad app credential delete`) cuando la conexión esté confirmada | ✔ |
 | El tipo *Dynamic discovery* o *Dynamic* no funciona con Entra | Entra ID no admite registro dinámico de clientes (DCR) | Usar **Manual** | · |
 | `AADSTS50011` al conectar | La redirect URI no coincide | Registrar la callback URL exacta (Paso 6.3) | · |
-| `AADSTS50105` al conectar | Usuario sin el rol `MCP.User` (asignación obligatoria) | Añadirlo al grupo piloto si debe tener acceso. Es el comportamiento esperado para usuarios no autorizados | · |
+| `AADSTS50105` al conectar | Usuario sin el rol `MCP.User` (asignación obligatoria) | Añadirlo al grupo piloto si debe tener acceso. Es el comportamiento esperado para usuarios no autorizados | ✔ (E3b) |
 | Pantalla de consentimiento para el usuario | Falta consentimiento de administrador, o se pide `offline_access` | Conceder consentimiento a `MCP.Access` (Paso 5); decidir expresamente si se concede `offline_access` | · |
-| El usuario tiene que reconectar con frecuencia | No hay refresh token (`offline_access` no concedido) | Valorar conceder `offline_access` (prueba E4) | · |
+| El usuario tiene que reconectar con frecuencia | No hay refresh token (`offline_access` no concedido) | Valorar conceder `offline_access`. En el laboratorio, el conector renovó los tokens sin intervención del usuario (E4) | · |
+| Un usuario al que se **retiró** el acceso sigue usando el MCP | El token de acceso ya emitido es válido hasta su `exp` (60–90 min por defecto). Entra no revoca en tiempo real los tokens de APIs propias (no hay CAE) | Es lo esperado: el corte llega en la siguiente renovación (E5). Para un corte inmediato, bloquear en el MCP (por `oid`) o en la red. Para acortar el plazo, una política de duración de tokens en la API (mínimo 10 min) | ✔ (E5) |
+| Tras **devolver** el acceso a un usuario, Teams sigue mostrando **Connect** en bucle: *Connect → Create* crea conexiones nuevas (correctas en Entra), **Reconnect** repara la antigua, pero el agente sigue pidiendo conectar o responde `consent_granted`, y **no llega nada al MCP** | La conexión que quedó en error tras la revocación, y los duplicados creados después, dejan al agente en un estado que no se recupera solo | Borrar **todas** las conexiones del usuario con ese conector (ver el bloque siguiente) y que el usuario cree **una sola**: *Connect → Create → Continue*. Funcionó en el mismo chat, sin reinstalar el agente | ✔ (E6) |
+
+Listar y borrar las conexiones de un usuario con el conector del MCP (como administrador del entorno):
+
+```powershell
+. .\tools\lab-config.ps1
+$ENV_ID = Get-LabSetting powerPlatform.environmentId
+$UPN = '<usuario@tu-dominio>'
+$base = "https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/$ENV_ID"
+$out = "$env:TEMP\conexiones.json"
+az rest --method GET --resource https://service.powerapps.com/ --url "$base/connections?api-version=2016-11-01" -o json > $out
+$mias = (Get-Content $out -Raw | ConvertFrom-Json).value | Where-Object {
+    $_.properties.createdBy.userPrincipalName -eq $UPN -and
+    $_.properties.displayName -eq (Get-LabSetting powerPlatform.connectorDisplayName) }
+$mias | ForEach-Object { '{0}  {1}  {2}' -f $_.name, $_.properties.createdTime, $_.properties.statuses[0].status }
+# Revisa la lista y, si es correcta, bórralas:
+$mias | ForEach-Object {
+    $api = $_.properties.apiId.Split('/')[-1]
+    az rest --method DELETE --resource https://service.powerapps.com/ --url "$base/apis/$api/connections/$($_.name)?api-version=2016-11-01" -o none
+}
+Remove-Item $out
+```
 
 ### 6.4 Copilot Studio y Teams
 
@@ -1930,6 +1973,8 @@ flowchart TD
 | El grupo no aparece al buscar en **Compartir** | El selector nuevo no encuentra grupos de seguridad **sin correo** | Compartir con usuarios individuales, o usar *Use Classic Sharing*. En producción, valorar grupos con correo habilitado | ✔ |
 | *Connector information unavailable* al crear la conexión | El conector del asistente MCP es un **conector de solución** de Dataverse. No se comparte desde Power Apps (`OperationNotSupportedForSolutionCustomConnectors`) y, desde octubre de 2026 (MC1520706), el rol *Basic User* no puede leerlo si no se comparte | `.\tools\grant-connector-access.ps1` | ✔ |
 | El usuario no aparece en Dataverse y no puede crear la conexión | No pertenece al grupo de seguridad del entorno | Añadirlo al grupo, si debe tener acceso | ✔ (Andre) |
+| Un usuario **fuera del grupo** instala el agente y ve la tarjeta **Connect** | El enlace de instalación y el chat no comprueban el grupo; la barrera efectiva es el entorno y el conector | Es lo esperado: al pulsar **Connect** recibe *Connector information unavailable* y no llega a Entra ni al MCP | ✔ (E3a) |
+| El usuario no ve el entorno en Power Apps para gestionar sus conexiones | Con el rol *Usuario básico*, Power Apps no lista el entorno | Usar la página **Administrar sus conexiones** del agente: `https://copilotstudio.microsoft.com/c2/tenants/<TENANT_ID>/environments/<ENVIRONMENT_ID>/cliagent/<schemaname>/channels/pva-studio/user-connections` (`schemaname` del agente en la tabla `bots`) | ✔ (E6) |
 
 ### 6.6 Conectividad con un MCP externo (GCP, on-premises u otra red)
 
@@ -2010,6 +2055,14 @@ publicación del MCP en Internet como «solución» al requisito de conectividad
 8. **APIM interno** si hay varios MCP: TLS público, `validate-jwt`, cuotas y trazabilidad centralizados.
 9. **Operación:** alertas sobre 401 y 403, retención de la auditoría, rotación de secretos (o
    credenciales federadas) y revisión ENS antes de la producción.
+10. **Altas y bajas de usuarios** (pruebas E5 y E6):
+    - **Baja:** al sacar a un usuario del grupo, **puede seguir usando el MCP hasta que caduque su
+      token**, entre 60 y 90 minutos por defecto. Si ese plazo no es aceptable, se puede bloquear en
+      el MCP (por `oid`) o acortar la duración de los tokens de la API con una política de Entra
+      (mínimo 10 minutos), a cambio de más renovaciones.
+    - **Reincorporación:** si se le devuelve el acceso, conviene **borrar las conexiones del usuario**
+      con el conector del MCP antes de que se vuelva a conectar (6.3). Así se evita el bucle de
+      **Connect**. Inclúyase en el procedimiento de soporte.
 
 **Alternativas** si el conector con OAuth delegado y VNet fallara en su entorno (sin exponer los MCP):
 

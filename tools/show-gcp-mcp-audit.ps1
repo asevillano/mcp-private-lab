@@ -34,7 +34,8 @@ $rows = foreach ($e in $entries) {
         event     = $p.event; method = $p.method; status = $p.status; mode = $p.identityMode
         user      = if ($p.objectId) { $names[$p.objectId] } else { '' }
         clientId  = $p.clientId; reason = $p.reason; requestId = $p.requestId
+        tokenIssuedAt = $p.tokenIssuedAt; tokenExpiresAt = $p.tokenExpiresAt
     }
 }
 if ($OutFile) { $rows | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $OutFile -Encoding utf8 }
-$rows | Format-Table TimeUtc, event, method, status, mode, user, clientId, reason -AutoSize
+$rows | Format-Table TimeUtc, event, method, status, mode, user, tokenIssuedAt, tokenExpiresAt, reason -AutoSize

@@ -21,7 +21,8 @@ ContainerAppConsoleLogs_CL
 | extend e = parse_json(Log_s)
 | project TimeGenerated, event = tostring(e.event), method = tostring(e.method), status = toint(e.status),
           mode = tostring(e.identityMode), objectId = tostring(e.objectId), clientId = tostring(e.clientId),
-          reason = tostring(e.reason), requestId = tostring(e.requestId)
+          reason = tostring(e.reason), requestId = tostring(e.requestId),
+          tokenIssuedAt = tostring(e.tokenIssuedAt), tokenExpiresAt = tostring(e.tokenExpiresAt)
 | order by TimeGenerated asc
 "@
 $body = Join-Path $env:TEMP 'mcp-audit-query.json'
@@ -45,4 +46,4 @@ $rows = foreach ($row in $r.tables[0].rows) {
     [pscustomobject]$o
 }
 if ($OutFile) { $rows | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $OutFile -Encoding utf8 }
-$rows | Format-Table TimeGenerated, event, method, status, mode, user, clientId, reason -AutoSize
+$rows | Format-Table TimeGenerated, event, method, status, mode, user, tokenIssuedAt, tokenExpiresAt, reason -AutoSize
